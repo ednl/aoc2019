@@ -13,6 +13,8 @@
 
 #define BUFLEN 16
 
+const char *inp = "inp02.txt";
+
 int main(void)
 {
 	FILE *fp;
@@ -20,7 +22,7 @@ int main(void)
 	int *prog;
 	int i, j, k, op, pc, c, n = 1;
 
-	if ((fp = fopen("inp02a.txt", "r")) != NULL)
+	if ((fp = fopen(inp, "r")) != NULL)
 		while ((c = fgetc(fp)) != EOF)
 			if (c == ',')
 				++n;

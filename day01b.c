@@ -13,6 +13,8 @@
 
 #define BUFLEN 16
 
+const char *inp = "inp01.txt";
+
 int fuel(int mass)
 {
 	if ((mass = mass / 3 - 2) > 0)
@@ -26,7 +28,7 @@ int main(void)
 	char line[BUFLEN];
 	int i, a = 0;
 
-	if ((fp = fopen("inp01a.txt", "r")) != NULL)
+	if ((fp = fopen(inp, "r")) != NULL)
 		while (fgets(line, sizeof line, fp) != NULL) {
 			i = atoi(line);
 			while ((i = fuel(i)) > 0)
