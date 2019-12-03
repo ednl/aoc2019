@@ -51,4 +51,5 @@ Module.symvers
 Mkfile.old
 dkms.conf
 .vscode/tasks.json
-day1
+day01a
+day01b
