@@ -7,20 +7,20 @@ int main(void)
 {
 	unsigned int n, m, i, p, q, r, s, z = 0;
 
-	for (n = START; n <= STOP; ++n) {
-	// for (n = 223333; n <= 223333; ++n) {
+	for (n = START; n <= STOP; ++n)
+	{
 		p = n % 10;               // current digit
 		m = n / 10;               // shift right
 		r = 1;                    // current repeat count
 		s = 0;                    // number of 2-peats
-		while (m) {
+		while (m)
+		{
 			q = m % 10;           // next digit
-			// printf("%u %u %u %u %u\n", n, p, q, r, s);
-			if (q > p) {          // not a valid pwd
+			if (q > p)            // not a valid pwd
 				goto nextn;
-			} else if (q == p) {  // repeated digit?
+			else if (q == p)      // repeated digit?
 				++r;
-			} else {              // different digit
+			else {                // different digit
 				if (r == 2)       // old repeat count is good?
 					++s;          // another 2-peat
 				p = q;            // current digit
@@ -28,10 +28,8 @@ int main(void)
 			}
 			m /= 10;              // shift right
 		}
-		if (s || r == 2) {
-			// printf("%u\n", n);
+		if (s || r == 2)          // also check last digit!
 			++z;
-		}
 nextn:;
 	}
 	printf("%u\n", z);
