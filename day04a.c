@@ -4,10 +4,6 @@
 #define STOP  673251u
 #define LEN 6
 
-void print(int *p)
-{
-
-}
 int main(void)
 {
 	unsigned int n, m, i, k, p = 0;

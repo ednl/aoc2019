@@ -2,33 +2,38 @@
 
 #define START 197487u
 #define STOP  673251u
-#define LEN 6
 
-void print(int *p)
-{
-
-}
 int main(void)
 {
-	unsigned int n, m, i, k, p = 0;
-	unsigned int d[LEN];
+	unsigned int n, m, i, p, q, r, s, z = 0;
 
 	for (n = START; n <= STOP; ++n) {
-		k = 0;
-		d[0] = n % 10;
-		m = n / 10;
-		for (i = 1; i < LEN; ++i) {
-			d[i] = m % 10;
-			if (d[i] > d[i - 1])
+	// for (n = 223333; n <= 223333; ++n) {
+		p = n % 10;               // current digit
+		m = n / 10;               // shift right
+		r = 1;                    // current repeat count
+		s = 0;                    // number of 2-peats
+		while (m) {
+			q = m % 10;           // next digit
+			// printf("%u %u %u %u %u\n", n, p, q, r, s);
+			if (q > p) {          // not a valid pwd
 				goto nextn;
-			else if (d[i] == d[i - 1])
-				++k;
-			m /= 10;
+			} else if (q == p) {  // repeated digit?
+				++r;
+			} else {              // different digit
+				if (r == 2)       // old repeat count is good?
+					++s;          // another 2-peat
+				p = q;            // current digit
+				r = 1;            // current repeat count
+			}
+			m /= 10;              // shift right
 		}
-		if (k)
-			++p;
+		if (s || r == 2) {
+			// printf("%u\n", n);
+			++z;
+		}
 nextn:;
 	}
-	printf("%u\n", p);
+	printf("%u\n", z);
 	return 0;
 }
