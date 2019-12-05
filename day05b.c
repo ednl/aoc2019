@@ -20,44 +20,43 @@
 #include <stdlib.h>  // atoi
 
 // Opcodes
+#define NOP  0  // no operation
 #define ADD  1  // add
 #define MUL  2  // multiply
-#define INP  3  // get user input
-#define OUT  4  // give output
+#define INP  3  // get input
+#define OUT  4  // send output
 #define JNZ  5  // jump non-zero
 #define JPZ  6  // jump zero
 #define CPL  7  // compare less than
 #define CPE  8  // compare equal
-#define RET 99  // halt program
+#define RET 99  // return
 
 // Parameters
 #define POS  0  // positional
 #define IMM  1  // immediate
-#define MAXP 3  // max number per opcode
-
-// Read 32-bit integer into buffer
-// max 10 digits + 2 optional \r\n + 1 string terminator + 3 safety
-#define BUFLEN 16
+#define ARG  3  // max number of parameters per opcode
 
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 typedef struct Lang {
+	char a[4];
 	int op, ic, oc;
 } LANG;
 
-// Language definition: { opcode, input count, output count }
+// Language definition: { asm, opcode, input count, output count }
 // Every input parameter can be positional or immediate
 // Output parameters are always positional
 const LANG lang[] = {
-	{ ADD, 2, 1 },
-	{ MUL, 2, 1 },
-	{ INP, 0, 1 },
-	{ OUT, 1, 0 },
-	{ JNZ, 2, 0 },
-	{ JPZ, 2, 0 },
-	{ CPL, 2, 1 },
-	{ CPE, 2, 1 },
-	{ RET, 0, 0 }
+	{ "NOP", NOP, 0, 0 },
+	{ "ADD", ADD, 2, 1 },
+	{ "MUL", MUL, 2, 1 },
+	{ "INP", INP, 0, 1 },
+	{ "OUT", OUT, 1, 0 },
+	{ "JNZ", JNZ, 2, 0 },
+	{ "JPZ", JPZ, 2, 0 },
+	{ "CPL", CPL, 2, 1 },
+	{ "CPE", CPE, 2, 1 },
+	{ "RET", RET, 0, 0 }
 };
 const int langsize = (sizeof lang) / (sizeof *lang);
 
@@ -66,121 +65,135 @@ const char *inp = "inp05.txt";
 
 ////////// Functions //////////////////////////////////////////////////////////
 
-// Count values in one-line CSV file
+// Count values in a one-line CSV file
 int size(void)
 {
 	FILE *fp;
 	char ch;
-	int values = 0;
+	int n = 0;
 
 	if ((fp = fopen(inp, "r")) != NULL)
 	{
-		values = 1;
+		n = 1;
 		while ((ch = fgetc(fp)) != EOF)
 			if (ch == ',')
-				++values;
+				++n;
 		fclose(fp);
 	}
-	return values;
+	return n;
 }
 
 // Read CSV values from file to memory
 // Arg: mem must be allocated
-int read(int *mem, int len)
+int read(int *m, int n)
 {
 	FILE *fp;
 	char *s = NULL;
-	size_t n = 0;
-	int i = 0;
+	size_t t = 0;
+	int p = 0;
 
 	if ((fp = fopen(inp, "r")) != NULL)
 	{
-		while (i < len && getdelim(&s, &n, ',', fp) > 0)
-			mem[i++] = atoi(s);
+		while (p < n && getdelim(&s, &t, ',', fp) > 0)
+			m[p++] = atoi(s);
 		free(s);
 		fclose(fp);
 	}
-	return i;
+	return p;
 }
 
 // Ask user input
 int input(void)
 {
-	char buf[BUFLEN];
+	char *s = NULL;
+	size_t t = 0;
+	int n = 0;
 
 	printf("? ");
-	if (fgets(buf, sizeof buf, stdin) != NULL)
-		return atoi(buf);
-	return 0;
+	if (getline(&s, &t, stdin) > 0)
+		n = atoi(s);
+	free(s);
+	return n;
 }
 
 // Give output value
 void output(int a)
 {
-	printf("%i\n", a);
+	printf("%d\n", a);
 }
 
-// Parse and execute instruction in memory mem at address pc
-// Ret: next address (-1 = halt)
-int exec(int *mem, int pc)
+// Parse and execute all instructions in memory
+void exec(int *m, int n)
 {
-	int i, j, op, in, p[MAXP];
+	int i, j, in, op, a[ARG], pc = 0;
 
-	if (pc >= 0 )
+	while (pc >= 0 && pc < n)
 	{
-		// Parse
-		in = mem[pc++];  // get instruction, incr program counter
-		op = in % 100;   // opcode part of the instruction
-		in /= 100;       // this leaves parameter modes
+		// Get opcode and modes from instruction
+		in = m[pc++];   // get instruction, increment program counter
+		op = in % 100;  // opcode part of instruction
+		in /= 100;      // this leaves parameter modes
 
-		for (i = 0; i < langsize; ++i)
-			if (lang[i].op == op)
+		// Look up opcode, halt if not found or too long
+		i = 0;
+		while (i < langsize && op != lang[i].op)
+			++i;
+		if (i == langsize)           // not in the language def?
+			return;                  // unknown opcode
+		if (pc + lang[i].ic + lang[i].oc > n)
+			return;                  // too many parameters
+
+		// Get input parameter(s)
+		for (j = 0; j < lang[i].ic; ++j)
+		{
+			a[j] = m[pc++];          // get immediate value, increment pc
+			if (in % 10 == POS)      // mode = positional parameter?
 			{
-				// Get input parameter(s)
-				for (j = 0; j < lang[i].ic; ++j) {
-					p[j] = mem[pc++];      // get the immediate value, incr program counter
-					if (in % 10 == POS)    // positional?
-						p[j] = mem[p[j]];  // get the positional value
-					in /= 10;              // next parameter mode
-				}
-
-				// Get output parameter
-				if (lang[i].oc)
-					p[j] = mem[pc++];  // output always positional, incr program counter
-
-				// Execute
-				switch (op) {
-					case ADD: mem[p[2]] = p[0] + p[1];  break;
-					case MUL: mem[p[2]] = p[0] * p[1];  break;
-					case INP: mem[p[0]] = input();      break;
-					case OUT: output(p[0]);             break;
-					case JNZ: if (p[0]) pc = p[1];      break;
-					case JPZ: if (!p[0]) pc = p[1];     break;
-					case CPL: mem[p[2]] = p[0] < p[1];  break;
-					case CPE: mem[p[2]] = p[0] == p[1]; break;
-					default: return -1;  // RET or unknown opcode, halt program
-				}
-
-				// Done, return address of next instruction
-				return pc;
+				if (a[j] >= 0 && a[j] < n)
+					a[j] = m[a[j]];  // get positional value
+				else
+					return;          // segfault
 			}
+			in /= 10;                // next parameter mode
+		}
+
+		// Get output parameter (always positional but keep the address)
+		if (lang[i].oc)
+		{
+			a[j] = m[pc++];  // also increment program counter
+			if (a[j] < 0 || a[j] >= n)
+				return;      // address out of bounds
+		}
+
+		// Execute
+		switch (op)
+		{
+			case NOP: break;
+			case ADD: m[a[2]] = a[0] + a[1];  break;
+			case MUL: m[a[2]] = a[0] * a[1];  break;
+			case INP: m[a[0]] = input();      break;
+			case OUT: output(a[0]);           break;
+			case JNZ: if ( a[0]) pc = a[1];   break;
+			case JPZ: if (!a[0]) pc = a[1];   break;
+			case CPL: m[a[2]] = a[0] < a[1];  break;
+			case CPE: m[a[2]] = a[0] == a[1]; break;
+			default: return;  // RET or unknown opcode: halt program
+		}
 	}
-	return -1;  // error, halt program
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(void)
 {
-	int *memory = NULL;
-	int len, pc = 0;
+	int len, *mem = NULL;
 
 	if ((len = size()) > 0)
-		if ((memory = malloc(len * sizeof *memory)) != NULL)
+		if ((mem = malloc(len * sizeof *mem)) != NULL)
 		{
-			if ((read(memory, len)) == len)
-				while ((pc = exec(memory, pc)) >= 0);
-			free(memory);
+			if (read(mem, len) == len)
+				exec(mem, len);
+			free(mem);
 		}
 	return 0;
 }
