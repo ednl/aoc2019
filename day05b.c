@@ -26,8 +26,8 @@
 #define OUT  4  // give output
 #define JNZ  5  // jump non-zero
 #define JPZ  6  // jump zero
-#define CLT  7  // compare less than
-#define CEQ  8  // compare equal
+#define CPL  7  // compare less than
+#define CPE  8  // compare equal
 #define RET 99  // halt program
 
 // Parameters
@@ -42,10 +42,12 @@
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 typedef struct Lang {
-	int op, ic, oc;  // opcode, input count, output count
-} LANG, *PLANG;
+	int op, ic, oc;
+} LANG;
 
-// Language definition
+// Language definition: { opcode, input count, output count }
+// Every input parameter can be positional or immediate
+// Output parameters are always positional
 const LANG lang[] = {
 	{ ADD, 2, 1 },
 	{ MUL, 2, 1 },
@@ -53,11 +55,11 @@ const LANG lang[] = {
 	{ OUT, 1, 0 },
 	{ JNZ, 2, 0 },
 	{ JPZ, 2, 0 },
-	{ CLT, 2, 1 },
-	{ CEQ, 2, 1 },
+	{ CPL, 2, 1 },
+	{ CPE, 2, 1 },
 	{ RET, 0, 0 }
 };
-const int langsize = (sizeof lang) / (sizeof lang[0]);
+const int langsize = (sizeof lang) / (sizeof *lang);
 
 // Location of program on disk
 const char *inp = "inp05.txt";
@@ -65,7 +67,7 @@ const char *inp = "inp05.txt";
 ////////// Functions //////////////////////////////////////////////////////////
 
 // Count values in one-line CSV file
-int progsize(void)
+int size(void)
 {
 	FILE *fp;
 	char ch;
@@ -127,24 +129,24 @@ int exec(int *mem, int pc)
 	if (pc >= 0 )
 	{
 		// Parse
-		in = mem[pc++];       // get instruction, incr program counter
-		op = in % 100;        // opcode part of the instruction
-		in /= 100;            // this leaves parameter modes
+		in = mem[pc++];  // get instruction, incr program counter
+		op = in % 100;   // opcode part of the instruction
+		in /= 100;       // this leaves parameter modes
 
 		for (i = 0; i < langsize; ++i)
 			if (lang[i].op == op)
 			{
 				// Get input parameter(s)
 				for (j = 0; j < lang[i].ic; ++j) {
-					p[j] = mem[pc++];       // get the immediate value, incr program counter
-					if (in % 10 == POS)     // positional?
-						p[j] = mem[p[j]];   // get the positional value
-					in /= 10;               // next parameter mode
+					p[j] = mem[pc++];      // get the immediate value, incr program counter
+					if (in % 10 == POS)    // positional?
+						p[j] = mem[p[j]];  // get the positional value
+					in /= 10;              // next parameter mode
 				}
 
 				// Get output parameter
 				if (lang[i].oc)
-					p[j] = mem[pc++];       // output is always positional, incr program counter
+					p[j] = mem[pc++];  // output always positional, incr program counter
 
 				// Execute
 				switch (op) {
@@ -154,43 +156,31 @@ int exec(int *mem, int pc)
 					case OUT: output(p[0]);             break;
 					case JNZ: if (p[0]) pc = p[1];      break;
 					case JPZ: if (!p[0]) pc = p[1];     break;
-					case CLT: mem[p[2]] = p[0] < p[1];  break;
-					case CEQ: mem[p[2]] = p[0] == p[1]; break;
-					case RET: return -1;    // halt program
+					case CPL: mem[p[2]] = p[0] < p[1];  break;
+					case CPE: mem[p[2]] = p[0] == p[1]; break;
+					default: return -1;  // RET or unknown opcode, halt program
 				}
 
-				// Done, go to next instruction
+				// Done, return address of next instruction
 				return pc;
 			}
 	}
 	return -1;  // error, halt program
 }
 
-// Copy program from src to dst
-void copy(int *src, int *dst, int len)
-{
-	while (len--)
-		*dst++ = *src++;
-}
-
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(void)
 {
-	int *data = NULL, *memory = NULL;
+	int *memory = NULL;
 	int len, pc = 0;
 
-	if ((len = progsize()) > 0)
-		if ((data = malloc(len * sizeof *data)) != NULL)
+	if ((len = size()) > 0)
+		if ((memory = malloc(len * sizeof *memory)) != NULL)
 		{
-			if ((read(data, len)) == len)
-				if ((memory = malloc(len * sizeof *memory)) != NULL)
-				{
-					copy(data, memory, len);
-					while ((pc = exec(memory, pc)) >= 0);
-					free(memory);
-				}
-			free(data);
+			if ((read(memory, len)) == len)
+				while ((pc = exec(memory, pc)) >= 0);
+			free(memory);
 		}
 	return 0;
 }
