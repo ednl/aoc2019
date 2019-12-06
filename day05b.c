@@ -39,24 +39,23 @@
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 typedef struct Lang {
-	char a[4];
-	int op, ic, oc;
+	int op, rc, wc;
 } LANG;
 
-// Language definition: { asm, opcode, input count, output count }
-// Every input parameter can be positional or immediate
-// Output parameters are always positional
+// Language definition: { opcode, read count, write count }
+// Every read parameter can be positional or immediate
+// Write parameters are always positional
 const LANG lang[] = {
-	{ "NOP", NOP, 0, 0 },
-	{ "ADD", ADD, 2, 1 },
-	{ "MUL", MUL, 2, 1 },
-	{ "INP", INP, 0, 1 },
-	{ "OUT", OUT, 1, 0 },
-	{ "JNZ", JNZ, 2, 0 },
-	{ "JPZ", JPZ, 2, 0 },
-	{ "CPL", CPL, 2, 1 },
-	{ "CPE", CPE, 2, 1 },
-	{ "RET", RET, 0, 0 }
+	{ NOP, 0, 0 },
+	{ ADD, 2, 1 },
+	{ MUL, 2, 1 },
+	{ INP, 0, 1 },
+	{ OUT, 1, 0 },
+	{ JNZ, 2, 0 },
+	{ JPZ, 2, 0 },
+	{ CPL, 2, 1 },
+	{ CPE, 2, 1 },
+	{ RET, 0, 0 }
 };
 const int langsize = (sizeof lang) / (sizeof *lang);
 
@@ -140,29 +139,28 @@ void exec(int *m, int n)
 			++i;
 		if (i == langsize)           // not in the language def?
 			return;                  // unknown opcode
-		if (pc + lang[i].ic + lang[i].oc > n)
-			return;                  // too many parameters
+		if (pc + lang[i].rc + lang[i].wc > n)
+			return;                  // segfault
 
-		// Get input parameter(s)
-		for (j = 0; j < lang[i].ic; ++j)
+		// Get read parameter(s)
+		for (j = 0; j < lang[i].rc; ++j)
 		{
 			a[j] = m[pc++];          // get immediate value, increment pc
 			if (in % 10 == POS)      // mode = positional parameter?
 			{
-				if (a[j] >= 0 && a[j] < n)
-					a[j] = m[a[j]];  // get positional value
-				else
+				if (a[j] < 0 || a[j] >= n)
 					return;          // segfault
+				a[j] = m[a[j]];      // get positional value
 			}
 			in /= 10;                // next parameter mode
 		}
 
 		// Get output parameter (always positional but keep the address)
-		if (lang[i].oc)
+		if (lang[i].wc)
 		{
-			a[j] = m[pc++];  // also increment program counter
+			a[j] = m[pc++];  // get address, increment program counter
 			if (a[j] < 0 || a[j] >= n)
-				return;      // address out of bounds
+				return;      // segfault
 		}
 
 		// Execute
