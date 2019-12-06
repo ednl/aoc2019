@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Advent of Code 2019
-// Day 5b: Intcode program expanded more
+// Day 6b: orbit tree traverse from you to Santa
 //
 // E. Dronkert
 // https://github.com/ednl/aoc2019
