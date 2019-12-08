@@ -7,8 +7,7 @@
 int main(void)
 {
 	FILE *fp;
-	char c;
-	int i, k, bit[P];
+	int i, c, k, bit[P];
 
 	for (i = 0; i < P; ++i)
 		bit[i] = 2;

@@ -7,8 +7,7 @@
 int main(void)
 {
 	FILE *fp;
-	char c;
-	int i = 0, k, n[] = {0,0,0}, min = -1, res = -1;
+	int i = 0, c, k, n[] = {0,0,0}, min = -1, res = -1;
 
 	if ((fp = fopen("inp08.txt", "r")) != NULL)
 	{
