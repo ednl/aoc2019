@@ -10,7 +10,7 @@ int main(void)
 	char c;
 	int i, k, bit[P];
 
-	if ((fp = fopen("inp08.txt", "r")) > 0)
+	if ((fp = fopen("inp08.txt", "r")) != NULL)
 	{
 		for (i = 0; i < P; ++i)
 			bit[i] = 2;
