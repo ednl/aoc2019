@@ -7,14 +7,13 @@
 int main(void)
 {
 	FILE *fp;
-	char c;
-	int i, k, bit[P];
+	int i, c, k, bit[P];
 
-	if ((fp = fopen("inp08.txt", "r")) > 0)
+	for (i = 0; i < P; ++i)
+		bit[i] = 2;
+
+	if ((fp = fopen("inp08.txt", "r")) != NULL)
 	{
-		for (i = 0; i < P; ++i)
-			bit[i] = 2;
-
 		i = 0;
 		while ((c = fgetc(fp)) != EOF)
 			if ((k = c - '0') >= 0 && k < 3)
@@ -24,15 +23,13 @@ int main(void)
 				if (++i == P)
 					i = 0;
 			}
-
 		i = 0;
 		while (i < P)
 		{
-			printf("%c", bit[i++] ? '*' : ' ');
+			printf("%c", bit[i++] == 1 ? '*' : ' ');
 			if (!(i % W))
 				printf("\n");
 		}
 	}
-
 	return 0;
 }
