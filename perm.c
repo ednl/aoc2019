@@ -1,54 +1,34 @@
 #include <stdio.h>
 
 #define N 5
-
-void print(int *a)
-{
-	int i;
-
-	for (i = 0; i < N; ++i)
-		printf("%d", a[i]);
-	printf("\n");
-}
-
-void swap(int *a, int i, int j)
-{
-	if (i >= 0 && j >= 0 && i < N && j < N)
-	{
-		int t = a[j];
-		a[j] = a[i];
-		a[i] = t;
-	}
-}
+#define M 10
 
 int main(void)
 {
-	int p[N] = {0, 1, 2, 3, 4};
-	int q[N] = {0, 0, 0, 0, 0};
-	int i = 0, j = 0;
+	int a, b, c, d, e, i = 0;
 
-	printf("%3d: ", ++j);
-	print(p);
-
-	while (i < N)
+	for (a = N; a < M; ++a)
 	{
-		if (q[i] < i)
+		for (b = N; b < M; ++b)
 		{
-			if (i % 2)
-				swap(p, q[i], i);
-			else
-				swap(p, 0, i);
-
-			printf("%3d: ", ++j);
-			print(p);
-
-			q[i] += 1;
-			i = 0;
-		}
-		else
-		{
-			q[i] = 0;
-			i += 1;
+			if (b == a)
+				continue;
+			for (c = N; c < M; ++c)
+			{
+				if (c == a || c == b)
+					continue;
+				for (d = N; d < M; ++d)
+				{
+					if (d == a || d == b || d == c)
+						continue;
+					for (e = N; e < M; ++e)
+					{
+						if (e == a || e == b || e == c || e == d)
+							continue;
+						printf("%3d: %d %d %d %d %d\n", ++i, a, b, c, d, e);
+					}
+				}
+			}
 		}
 	}
 	return 0;
