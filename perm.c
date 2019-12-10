@@ -1,5 +1,4 @@
 #include <stdio.h>   // printf
-#include <stdlib.h>  // malloc
 
 void perm1(void)
 {
