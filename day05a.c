@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Advent of Code 2019
-// Day 5a: Intcode program expanded
+// Day 5: Sunny with a Chance of Asteroids, part one
 //
 // E. Dronkert
 // https://github.com/ednl/aoc2019

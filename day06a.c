@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Advent of Code 2019
-// Day 6a: orbit search tree
+// Day 6: Universal Orbit Map, part two
 //
 // E. Dronkert
 // https://github.com/ednl/aoc2019

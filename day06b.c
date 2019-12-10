@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Advent of Code 2019
-// Day 6b: orbit tree traverse from you to Santa
+// Day 6: Universal Orbit Map, part two
 //
 // E. Dronkert
 // https://github.com/ednl/aoc2019

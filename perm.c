@@ -49,7 +49,8 @@ void perm2(int n, int k)
 		} else                // this permutation is ready
 		{
 			// Do something with the permutation
-			// (but can't return a value from a recursive function)
+			// (must be done here because recursive function
+			// still only returns once to parent)
 			for (i = 0; i < n; ++i)
 				printf("%d", r[i]);
 			printf("\n");
