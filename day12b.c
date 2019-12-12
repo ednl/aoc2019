@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #define N   4
 #define DIM 3
@@ -20,7 +21,7 @@
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 typedef struct Body {
-	long pos, vel;
+	int64_t pos, vel;
 } BODY;
 
 ////////// Globals ////////////////////////////////////////////////////////////
@@ -32,7 +33,7 @@ typedef struct Body {
 // <x=2, y=-10, z=-7>
 // <x=4, y=-8, z=8>
 // <x=3, y=5, z=-1>
-// BODY part[LEN] = {
+// static BODY part[LEN] = {
 // 	{-1,0},{  2,0},{ 4,0},{ 3,0},
 // 	{ 0,0},{-10,0},{-8,0},{ 5,0},
 // 	{ 2,0},{ -7,0},{ 8,0},{-1,0}};
@@ -44,7 +45,7 @@ typedef struct Body {
 // <x=5, y=5, z=10>
 // <x=2, y=-7, z=3>
 // <x=9, y=-8, z=-3>
-// BODY part[LEN] = {
+// static BODY part[LEN] = {
 // 	{ -8, 0},{ 5, 0},{ 2, 0},{ 9, 0},
 // 	{-10, 0},{ 5, 0},{-7, 0},{-8, 0},
 // 	{  0, 0},{10, 0},{ 3, 0},{-3, 0}};
@@ -60,12 +61,12 @@ typedef struct Body {
 // <x=9, y=12, z=5>
 // <x=-9, y=0, z=-4>
 // <x=4, y=6, z=0>
-BODY part[LEN] = {
+static BODY part[LEN] = {
 	{ -7, 0},{ 9, 0},{-9, 0},{4, 0},
 	{ 17, 0},{12, 0},{ 0, 0},{6, 0},
 	{-11, 0},{ 5, 0},{-4, 0},{0, 0}};
 
-BODY init[N];
+static BODY init[N];
 
 ////////// Functions //////////////////////////////////////////////////////////
 
@@ -74,7 +75,7 @@ BODY init[N];
 void evolve(int dim)
 {
 	int i, j, p0 = N * dim, pn = N * (dim + 1);
-	long d;
+	int64_t d;
 
 	for (i = p0; i < pn - 1; ++i)
 		for (j = i + 1; j < pn; ++j)
@@ -90,15 +91,15 @@ void evolve(int dim)
 
 // Energy of moon i
 // i = 0..N-1
-long energy(int n)
+int64_t energy(int n)
 {
 	int i;
-	long ep = 0, ek = 0;
+	int64_t ep = 0, ek = 0;
 
 	for (i = 0; i < LEN; i += N)
 	{
-		ep += labs(part[n + i].pos);  // potential energy
-		ek += labs(part[n + i].vel);  // kinetic energy
+		ep += llabs(part[n + i].pos);  // potential energy
+		ek += llabs(part[n + i].vel);  // kinetic energy
 	}
 	return ep * ek;
 }
@@ -136,9 +137,9 @@ int sameconfig(int dim)
 }
 
 // Greatest Common Divisor
-long gcd(long a, long b)
+int64_t gcd(int64_t a, int64_t b)
 {
-	long t;
+	int64_t t;
 	while (b)
 	{
 		t = b;
@@ -149,7 +150,7 @@ long gcd(long a, long b)
 }
 
 // Least (Lowest) Common Multiple
-long lcm(long a, long b)
+int64_t lcm(int64_t a, int64_t b)
 {
 	return a / gcd(a, b) * b;
 }
@@ -159,7 +160,7 @@ long lcm(long a, long b)
 int main(void)
 {
 	int i, dim, repeat[DIM] = {0,0,0};
-	long res;
+	int64_t res;
 
 	// 1000 generations for every dimension
 	for (dim = 0; dim < DIM; ++dim)
@@ -170,7 +171,7 @@ int main(void)
 	res = 0;
 	for (i = 0; i < N; ++i)
 		res += energy(i);
-	printf("%ld\n", res);
+	printf("%lld\n", res);
 
 	// Dimensions repeat after how many steps?
 	// (bijective so any starting point is good)
@@ -188,7 +189,7 @@ int main(void)
 	res = repeat[0];
 	for (i = 1; i < DIM; ++i)
 		res = lcm(res, repeat[i]);
-	printf("%ld\n", res);
+	printf("%lld\n", res);
 
 	return 0;
 }
