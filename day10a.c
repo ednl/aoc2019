@@ -12,11 +12,13 @@
 
 #include <stdio.h>   // fopen, fgetc, printf
 #include <stdlib.h>  // atoi, atol
+#include <math.h>    // sqrt, atan2
 
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 typedef struct Pos {
-	int x, y, n;
+	int x, y, n, shot;
+	double angle, dist;
 } POS, *PPOS;
 
 // Location of program on disk
@@ -97,7 +99,7 @@ int read(void)
 			if (c == '#' || c == '.')
 			{
 				if (c == '#')
-					asteroids[p++] = (POS){ i % width, i / width, 0 };
+					asteroids[p++] = (POS){ i % width, i / width, 0, 0, 0.0, 0.0 };
 				field[i++] = (c == '#');
 			}
 		fclose(fp);
@@ -122,16 +124,35 @@ int cansee(int x, int y, int sx, int sy, int sn)
 	return test;
 }
 
+int cmp(const void *a, const void *b)
+{
+	double p, q;
+
+	p = ((const PPOS)a)->angle;
+	q = ((const PPOS)b)->angle;
+	if (p < q)
+		return -1;
+	if (p > q)
+		return 1;
+	p = ((const PPOS)a)->dist;
+	q = ((const PPOS)b)->dist;
+	if (p < q)
+		return -1;
+	if (p > q)
+		return 1;
+	return 0;
+}
+
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(void)
 {
 	int i, j, k, dx, dy, s, t, stepx, stepy, steps, max = 0, imax = 0, min;
+	double f;
 
 	width = chars();
 	depth = lines();
 	count = size();
-	//printf("w=%d h=%d n=%d\n", width, depth, count);
 	if (width > 0 && depth > 0 && count > 0)
 	{
 		asteroids = malloc(count * sizeof *asteroids);
@@ -140,6 +161,7 @@ int main(void)
 		{
 			if (read() == count)
 			{
+				// Print field
 				k = 0;
 				for (i = 0; i < depth; ++i)
 				{
@@ -150,7 +172,6 @@ int main(void)
 				// Data is good
 				for (i = 0; i < count; ++i)  // test every asteroid
 				{
-					//printf("from [i=%d x=%d y=%d]\n", i, asteroids[i].x, asteroids[i].y);
 					for (j = 0; j < count; ++j)
 					{
 						if (i != j)  // compare with every other asteroid
@@ -158,7 +179,6 @@ int main(void)
 							// get common factors from dx, dy
 							dx = asteroids[j].x - asteroids[i].x;  // from i to j
 							dy = asteroids[j].y - asteroids[i].y;
-							//printf("to [j=%d x=%d y=%d] [dx=%d dy=%d] ", j, asteroids[j].x, asteroids[j].y, dx, dy);
 							if (abs(dx) > 1 || abs(dy) > 1)
 							{
 								if (!dx || !dy)
@@ -169,7 +189,6 @@ int main(void)
 									steps = dx ? abs(dx) : abs(dy);
 									t = cansee(asteroids[i].x, asteroids[i].y, stepx, stepy, steps);
 									asteroids[i].n += t;
-									//printf("sx=%d sy=%d sn=%d %s\n", stepx, stepy, steps, t ? "Y0" : "n0");
 								} else if (abs(dx) == abs(dy))
 								{
 									// diagonal
@@ -178,49 +197,87 @@ int main(void)
 									steps = abs(dx);
 									t = cansee(asteroids[i].x, asteroids[i].y, stepx, stepy, steps);
 									asteroids[i].n += t;
-									//printf("sx=%d sy=%d sn=%d %s\n", stepx, stepy, steps, t ? "Y1" : "n1");
 								} else
 								{
 									// at an angle
 									t = 1;  // premise is: yes, we see j from i
 									min = abs(dx) < abs(dy) ? abs(dx) : abs(dy);
-									for (k = 2; k <= min; ++k)
+									for (k = min; k >= 2; --k)
 									{
 										if (!(dx % k) && !(dy % k))  // must be integer steps
 										{
 											stepx = dx / k;  // integer steps from asteroid i to j
 											stepy = dy / k;
 											steps = k;
-											//printf("sx=%d sy=%d sn=%d ", stepx, stepy, steps);
 											t = t && cansee(asteroids[i].x, asteroids[i].y, stepx, stepy, steps);
 											if (!t)
 												break;
 										}
 									}
-									//printf("%s\n", t ? "Yk" : "nk");
-									if (t)         // no intermediate asteroid?
+									if (t)  // no intermediate asteroid?
 										asteroids[i].n++;  // asteroid j can be seen from i
 								}
 							} else
-							{
 								// too close, no intermediate points
-								//printf("Y\n");
 								asteroids[i].n++;
-							}
 						}
 					}
-					//printf("%2d (%d,%d) = %2d\n", i, asteroids[i].x, asteroids[i].y, asteroids[i].n);
 					if (asteroids[i].n > max)
 					{
 						max = asteroids[i].n;
 						imax = i;
 					}
 				}
+				printf("max %d(%d,%d) = %d\n", imax, asteroids[imax].x, asteroids[imax].y, max);
+				// Compute distance and angle from the observation point for every asteroid
+				for (i = 0; i < count; ++i)
+				{
+					if (i == imax)
+						continue;
+					dx = asteroids[i].x - asteroids[imax].x;
+					dy = asteroids[i].y - asteroids[imax].y;
+					asteroids[i].dist = sqrt(dx * dx + dy * dy);
+					f = atan2(dy, dx) + M_PI / 2;
+					if (f < 0)
+						f += M_PI * 2;
+					asteroids[i].angle = f;
+				}
+				qsort(asteroids, count, sizeof *asteroids, cmp);
+				f = 0;
+				for (i = 0; i < count; ++i)
+				{
+					if (asteroids[i].angle > f && asteroids[i].angle - f < 0.001)
+						puts("----------------------------");
+					f = asteroids[i].angle;
+					printf("%3d: %2d,%2d %5.3f %6.3f\n", i, asteroids[i].x, asteroids[i].y, asteroids[i].angle, asteroids[i].dist);
+				}
+				// Shoot
+				k = 0;  // number of shots
+				i = 1;  // index of asteroid in the crosshairs
+				while (k < 200 && k < count - 1)
+				{
+					// next one not shot yet
+					while (asteroids[i].shot)
+						i = (i % (count - 1)) + 1;
+					++k;
+					printf("%3d: %3d %2d,%2d %5.3f %6.3f\n", k, i, asteroids[i].x, asteroids[i].y, asteroids[i].angle, asteroids[i].dist);
+					if (k == 200)
+					{
+						// found the 200th shot
+						printf("%d\n", 100 * asteroids[i].x + asteroids[i].y);
+						break;
+					}
+					asteroids[i].shot = 1;
+					// skip all asteroids on the same angle
+					f = asteroids[i].angle;
+					i = (i % (count - 1)) + 1;
+					while (asteroids[i].angle == f)
+						i = (i % (count - 1)) + 1;
+				}
 			}
 		}
 		free(field);
 		free(asteroids);
 	}
-	printf("max %d(%d,%d) = %d\n", imax, asteroids[imax].x, asteroids[imax].y, max);
 	return 0;
 }
