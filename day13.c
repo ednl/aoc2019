@@ -16,7 +16,6 @@
 
 #include <stdio.h>   // fopen, fgetc, getdelim, printf
 #include <stdlib.h>  // atoi, atol
-#include <stdint.h>  // int64_t
 
 #define DEBUG
 #define PAD 1000  // storage space to add at end of program
@@ -105,6 +104,8 @@ static int fifohead = 0, fifotail = 0, fifosize = 0;
 static long *dat = NULL, *mem = NULL;
 static int datsize = 0, memsize = 0;
 
+static long ball = 0, paddle = 0;
+
 ////////// Function Declarations //////////////////////////////////////////////
 
 int fifo_pop(PDICT);
@@ -112,10 +113,11 @@ int fifo_push(DICT);
 int fifo_flush(int);
 void output(long, int);
 long input(int);
-int size(void);
-int read(void);
-void copy(void);
-int exec(int, int, int);
+int sizecsv(void);
+int readcsv(void);
+void copyprog(void);
+int execprog(int);
+void drawtile(int, int, int);
 
 ////////// Function Definitions ///////////////////////////////////////////////
 
@@ -221,7 +223,7 @@ long input(int mode)
 }
 
 // Count values in a one-line CSV file by counting commas + 1
-int size(void)
+int sizecsv(void)
 {
 	FILE *fp;
 	char ch;
@@ -242,7 +244,7 @@ int size(void)
 // Pre: dat must be allocated to size datsize > 0
 //      inp must contain name of readable file
 // Ret: number of values read
-int read(void)
+int readcsv(void)
 {
 	FILE *fp;        // file pointer
 	char *s = NULL;  // dynamically allocated buffer
@@ -262,7 +264,7 @@ int read(void)
 // Copy program from dat to mem and zero the padding
 // Pre: dat must be allocated to size datsize > 0
 //      mem must be allocated to size memsize >= datsize
-void copy(void)
+void copyprog(void)
 {
 	long *src, *dst;
 	int i;
@@ -281,18 +283,20 @@ void copy(void)
 }
 
 // Parse and execute all instructions in memory
-int exec(int reset, int inputmode, int outputmode)
+int execprog(int reset)
 {
 	static long base = 0;
 	static int pc = 0;
 
-	int i, j, retval = ERR_OK;
+	int i, j, k, retval = ERR_OK;
 	long in, op, par[ARG], parmode;
+
+	long vec[3];
+	int ivec = 0;
 
 	if (reset)
 	{
-		// Start from scratch
-		copy();
+		copyprog();
 		base = 0;
 		pc = 0;
 	}
@@ -364,8 +368,19 @@ int exec(int reset, int inputmode, int outputmode)
 		{
 			case ADD: mem[par[2]] = par[0] + par[1];  break;
 			case MUL: mem[par[2]] = par[0] * par[1];  break;
-			case IN : mem[par[0]] = input(inputmode); break;
-			case OUT: output(par[0], outputmode);     break;
+			case IN :
+				if ((k = ball - paddle))
+					k = k > 0 ? 1 : -1;
+				mem[par[0]] = k;
+				break;
+			case OUT:
+				vec[ivec++] = par[0];
+				if (ivec == 3)
+				{
+					drawtile(vec[0], vec[1], vec[2]);
+					ivec = 0;
+				}
+				break;
 			case JNZ: if ( par[0]) pc = par[1];       break;
 			case JZ : if (!par[0]) pc = par[1];       break;
 			case LT : mem[par[2]] = par[0] < par[1];  break;
@@ -382,56 +397,50 @@ int exec(int reset, int inputmode, int outputmode)
 	return retval;
 }
 
+// Draw tiles on screen
+// Arg: x=-1..41, y=0..23, t=0..4
+void drawtile(int x, int y, int z)
+{
+	if (x >= 0 && y >= 0)
+	{
+		// Tile
+		printf("\033[%d;%dH", y + 1, x + 1);
+		switch (z)
+		{
+			case TILE_EMPTY : printf(" "); break;
+			case TILE_WALL  : printf("#"); break;
+			case TILE_BLOCK : printf("x"); break;
+			case TILE_PADDLE: printf("_"); paddle = x; break;
+			case TILE_BALL  : printf("o"); ball   = x; break;
+		}
+	} else if (x == -1 && y == 0)
+	{
+		// Score
+		printf("\033[25;1H%d", z);
+	}
+}
+
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(void)
 {
-	int ret, len;
-	DICT a;
-	long x, y, t, ball, paddle;
+	int i, len, ret;
 
-	if ((len = size()) > 0)
+	if ((len = sizecsv()) > 0)
 	{
 		datsize = len;
 		memsize = len + PAD;
 		dat = malloc(datsize * sizeof *dat);
 		mem = malloc(memsize * sizeof *mem);
-		if (dat != NULL && mem != NULL && read() == len)
+		if (dat != NULL && mem != NULL && readcsv() == len)
 		{
-			//mem[0] = 2;  // play
-			ret = exec(RESET, INOUT_TERM, INOUT_FIFO);
-			printf("return value : %d\n", ret);
-			printf("\033[2J");  // clear screen
-			while (fifosize)
-			{
-				x = y = t = ball = paddle = 0;
-				if (fifo_pop(&a))
-					x = 1 + a.val;
-				if (fifo_pop(&a))
-					y = 1 + a.val;
-				if (fifo_pop(&a))
-					t = a.val;
-				if (x == 0 && y == 1)
-				{
-					// Score
-					printf("\033[25;1H");  // go to 25,1
-					printf("%ld", t);
-					return 0;
-				} else if (x >= 1 && y >= 1)
-				{
-					// Tile
-					printf("\033[%ld;%ldH", y, x);  // go to x,y
-					switch (t)
-					{
-						case TILE_EMPTY : printf(" "); break;
-						case TILE_WALL  : printf("#"); break;
-						case TILE_BLOCK : printf("x"); break;
-						case TILE_PADDLE: printf("_"); paddle = x; break;
-						case TILE_BALL  : printf("o"); ball = x; break;
-					}
-				}
-			}
-			printf("\033[26;1H");  // go to 1,26
+			printf("\033[?25l");   // hide cursor
+			printf("\033[2J");     // clear screen
+			dat[0] = 2;            // play
+			ret = execprog(RESET);
+			printf("\033[26;1H");  // goto 1,26
+			printf("\033[?25h");   // show cursor
+			//printf("ret = %d\n", ret);
 		}
 		free(mem);
 		free(dat);
