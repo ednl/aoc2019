@@ -226,8 +226,7 @@ long input(int mode)
 int sizecsv(void)
 {
 	FILE *fp;
-	char ch;
-	int i = 0;
+	int ch, i = 0;
 
 	if ((fp = fopen(inp, "r")) != NULL)
 	{
