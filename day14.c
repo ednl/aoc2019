@@ -26,8 +26,8 @@
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 // Puzzle input
-//static const char *inp = "test.txt";
-static const char *inp = "inp14.txt";
+static const char *inp = "test.txt";
+//static const char *inp = "inp14.txt";
 
 // Element, quantity
 typedef struct Elm {
@@ -46,7 +46,7 @@ typedef struct RevEq {
 
 REVEQ eq[MAXEQ];  // reverse equations
 int neq = 0;      // number of reverse equations
-ELM prod[MAXEQ];  // quantities produced
+ELM prod[MAXEQ];  // quantities produced per element
 
 int oreid = 0, fuelid = 0;
 
@@ -165,6 +165,22 @@ int cmpeq(const void *a, const void *b)
 	if (((PREVEQ)a)->inp.id < ((PREVEQ)b)->inp.id)
 		return -1;
 	return 1;
+}
+
+int require(int id, int q)
+{
+	int i, j;
+
+	if (id == oreid)
+		return q;
+	i = 0;
+	while (i < neq && eq[i].inp.id != id)
+		++i;
+	if (i == neq)
+		return 0;
+	//TODO: mult
+	for (j = 0; j < eq[i].len; ++j)
+		require(eq[i].out[j].id, eq[i].out[j].q);
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
