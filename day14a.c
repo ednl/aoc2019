@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Advent of Code 2019
-// Day 14:
+// Day 14: Space Stoichiometry, part one
 //
 // E. Dronkert
 // https://github.com/ednl/aoc2019
@@ -26,8 +26,8 @@
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 // Puzzle input
-//static const char *inp = "test.txt";
-static const char *inp = "inp14.txt";
+static const char *inp = "test.txt";
+//static const char *inp = "inp14.txt";
 
 // Element, quantity
 typedef struct Elm {
@@ -282,7 +282,7 @@ int main(void)
 		makeindex(n);  // also sorts FUEL equation to the top
 		//printequations(n);
 
-		prod[0] = 1;  // 1 FUEL in stock
+		prod[0] = 1000;  // 1 FUEL in stock
 		do
 		{
 			stock = 0;
@@ -300,7 +300,7 @@ int main(void)
 		} while (stock);
 
 		//printproduction(n);
-		printf("%ld\n", ore);
+		printf("%ld\n", ore);  // 278404
 	}
 
 	return 0;

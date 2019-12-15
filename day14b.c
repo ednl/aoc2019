@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Advent of Code 2019
-// Day 14:
+// Day 14: Space Stoichiometry, part two
 //
 // E. Dronkert
 // https://github.com/ednl/aoc2019
@@ -26,13 +26,14 @@
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 // Puzzle input
-static const char *inp = "test.txt";
-//static const char *inp = "inp14.txt";
+//static const char *inp = "test.txt";
+static const char *inp = "inp14.txt";
 
 // Element, quantity
 typedef struct Elm {
+	int ix;  // Index of this element in eq and prod arrays
 	int id;  // ID from element name
-	int q;   // quantity
+	long q;  // quantity
 } ELM, *PELM;
 
 // Reverse equation
@@ -44,20 +45,35 @@ typedef struct RevEq {
 
 ////////// Globals ////////////////////////////////////////////////////////////
 
-REVEQ eq[MAXEQ];  // reverse equations
-int neq = 0;      // number of reverse equations
-ELM prod[MAXEQ];  // quantities produced per element
+static REVEQ eq[MAXEQ];   // reverse equations
+static long prod[MAXEQ];  // quantities produced per element
 
-int oreid = 0, fuelid = 0;
+static int oreid = 0, fuelid = 0;
 
 ////////// Function Declarations //////////////////////////////////////////////
 
+int elmindex(int, int);
 int elmid(char *);
 int elmname(int);
 ELM parseelm(char *s);
 int readfile(void);
+int cmpelm(const void *, const void *);
+int cmpeq(const void *, const void *);
+void makeindex(int);
+void printequations(int);
+void printproduction(int);
+void init(void);
 
 ////////// Function Definitions ///////////////////////////////////////////////
+
+int elmindex(int id, int n)
+{
+	int i = 0;
+
+	while (i < n && eq[i].inp.id != id)
+		++i;
+	return i;
+}
 
 int elmid(char *s)
 {
@@ -107,7 +123,7 @@ ELM parseelm(char *s)
 		if (c)
 			id = elmid(pc);
 	}
-	return (ELM){ id, q };
+	return (ELM){ 0, id, q };
 }
 
 int readfile(void)
@@ -116,10 +132,11 @@ int readfile(void)
 	char *s = NULL;  // dynamically allocated buffer
 	size_t t = 0;    // size of buffer
 	char c, *pc;
-	int i, line = 0;
+	int i, j, ix, id, line = 0;
 
 	if ((fp = fopen(inp, "r")) != NULL)
 	{
+		// Read data
 		while (getline(&s, &t, fp) > 0)
 		{
 			pc = s;  // start at beginning of line
@@ -141,6 +158,7 @@ int readfile(void)
 		}
 		free(s);
 		fclose(fp);
+
 	}
 	return line;
 }
@@ -154,6 +172,7 @@ int cmpelm(const void *a, const void *b)
 	return 0;
 }
 
+// Pre: global fuelid
 int cmpeq(const void *a, const void *b)
 {
 	if (((PREVEQ)a)->inp.id == ((PREVEQ)b)->inp.id)
@@ -167,68 +186,127 @@ int cmpeq(const void *a, const void *b)
 	return 1;
 }
 
-int require(int id, int q)
+// Pre: global oreid
+void makeindex(int n)
+{
+	int i, j, ix, id;
+
+	// Sort
+	qsort(eq, n, sizeof(REVEQ), cmpeq);
+	for (i = 0; i < n; ++i)
+		qsort(eq[i].out, eq[i].len, sizeof(ELM), cmpelm);
+
+	// Prepare indices
+	for (i = 0; i < n; ++i)
+	{
+		eq[i].inp.ix = i;
+		for (j = 0; j < eq[i].len; ++j)
+			eq[i].out[j].ix = elmindex(eq[i].out[j].id, n);
+	}
+
+	// Test indices
+	for (i = 0; i < n; ++i)
+		for (j = 0; j < eq[i].len; ++j)
+		{
+			ix = eq[i].out[j].ix;
+			id = eq[i].out[j].id;
+			if (!(ix == n && id == oreid) &&
+				id != eq[ix].inp.id)
+			{
+				printf("Index error\n");
+				exit(1);
+			}
+		}
+}
+
+void printequations(int n)
 {
 	int i, j;
 
-	if (id == oreid)
-		return q;
-	i = 0;
-	while (i < neq && eq[i].inp.id != id)
-		++i;
-	if (i == neq)
-		return 0;
-	//TODO: mult
-	for (j = 0; j < eq[i].len; ++j)
-		require(eq[i].out[j].id, eq[i].out[j].q);
+	for (i = 0; i < n; ++i)
+	{
+		printf("%ld ", eq[i].inp.q);
+		elmname(eq[i].inp.id);
+		printf("(%d) =>", eq[i].inp.ix);
+		for (j = 0; j < eq[i].len; ++j)
+		{
+			if (j)
+				printf(",");
+			printf(" %ld ", eq[i].out[j].q);
+			elmname(eq[i].out[j].id);
+			printf("(%d)", eq[i].out[j].ix);
+		}
+		printf("\n");
+	}
+}
+
+void printproduction(int n)
+{
+	int i, j;
+
+	for (i = 0; i < n; ++i)
+		if (prod[i])
+		{
+			elmname(eq[i].inp.id);
+			printf(" %ld\n", prod[i]);
+		}
+}
+
+void init(void)
+{
+	int i, j;
+
+	oreid = elmid("ORE");
+	fuelid = elmid("FUEL");
+
+	for (i = 0; i < MAXEQ; ++i)
+	{
+		eq[i].len = MAXELM;
+		eq[i].inp = (ELM){ 0, 0, 0 };
+		for (j = 0; j < MAXELM; ++j)
+			eq[i].out[j] = (ELM){ 0, 0, 0 };
+		prod[i] = 0;
+	}
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(void)
 {
-	int neq, i, j;
+	int i, j, n, done;
+	long fuel = 0, ore = 0, target = 1000000000000;
 
-	// Init
-	for (i = 0; i < MAXEQ; ++i)
+	init();
+	if ((n = readfile()))
 	{
-		eq[i].len = MAXELM;
-		eq[i].inp = (ELM){ 0, 0 };
-		for (j = 0; j < MAXELM; ++j)
-			eq[i].out[j] = (ELM){ 0, 0 };
-		prod[i] = (ELM){ 0, 0 };
-	}
+		makeindex(n);  // also sorts FUEL equation to the top
+		//printequations(n);
 
-	oreid = elmid("ORE");
-	fuelid = elmid("FUEL");
-
-	// Parse
-	if ((neq = readfile()))
-	{
-		qsort(eq, neq, sizeof(REVEQ), cmpeq);
-		for (i = 0; i < neq; ++i)
-			qsort(eq[i].out, eq[i].len, sizeof(ELM), cmpelm);
-
-		// Print reverse equations
-		for (i = 0; i < neq; ++i)
+		fuel = target / 278404;
+		prod[0] = --fuel;
+		do
 		{
-			printf("%d ", eq[i].inp.q);
-			elmname(eq[i].inp.id);
-			printf(" =>");
-			for (j = 0; j < eq[i].len; ++j)
+			fuel++;
+			prod[0]++;  // add 1 FUEL to stock
+			do
 			{
-				if (j)
-					printf(",");
-				printf(" %d ", eq[i].out[j].q);
-				elmname(eq[i].out[j].id);
-			}
-			printf("\n");
-		}
+				done = 1;
+				for (i = 0; i < n; ++i)
+					while (prod[i] > 0)
+					{
+						done = 0;
+						prod[i] -= eq[i].inp.q;
+						for (j = 0; j < eq[i].len; ++j)
+							if (eq[i].out[j].id == oreid)
+								ore += eq[i].out[j].q;
+							else
+								prod[eq[i].out[j].ix] += eq[i].out[j].q;
+					}
+			} while (!done);
+			printf("%ld: %ld\n", fuel, ore);
+		} while (ore < target);
 
-		// Print production
-		for (i = 0; i < neq; ++i)
-		{
-		}
+		//printproduction(n);
 	}
 
 	return 0;
