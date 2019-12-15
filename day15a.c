@@ -66,8 +66,10 @@
 #define WALL   0
 #define EMPTY  1
 #define TARGET 2
-#define XDIM  80
+#define XDIM  41
 #define YDIM  40
+#define X0    21
+#define Y0    20
 
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
@@ -115,7 +117,7 @@ static int fifohead = 0, fifotail = 0, fifosize = 0;
 static long *dat = NULL, *mem = NULL;
 static int datsize = 0, memsize = 0;
 
-static int xbot = XDIM / 2, ybot = YDIM / 2;
+static int xbot = X0, ybot = Y0;
 static int xtarget = -1, ytarget = -1;
 static int move = NORTH, steps = 0;
 static int maze[XDIM * YDIM];
@@ -131,6 +133,7 @@ int sizecsv(void);
 int readcsv(void);
 void copyprog(void);
 int execprog(int);
+void drawpartial(int, int, int, int);
 void drawmaze(void);
 int getindex(int, int);
 COOR getpos(int);
@@ -402,46 +405,58 @@ int execprog(int reset)
 }
 
 // Draw maze
-void drawmaze(void)
+void drawpartial(int xmin, int ymin, int xmax, int ymax)
 {
-	static int xmin = XDIM - 1, xmax = 0;
-	static int ymin = YDIM - 1, ymax = 0;
-	int x, y, i;
+	int x, y;
 
-	printf("\033[2J");  // clear screen
-	i = 0;
-	for (y = 0; y < YDIM; ++y)
-		for (x = 0; x < XDIM; ++x)
-		{
-			if (maze[i] != TODO)
-			{
-				if (x < xmin) xmin = x;
-				if (x > xmax) xmax = x;
-				if (y < ymin) ymin = y;
-				if (y > ymax) ymax = y;
-			}
-			++i;
-		}
+	if (xmin > xmax)
+	{
+		x = xmin;
+		xmin = xmax;
+		xmax = x;
+	}
+	if (ymin > ymax)
+	{
+		y = ymin;
+		ymin = ymax;
+		ymax = y;
+	}
 
-	i = 0;
+	//printf("\033[2J");  // clear screen
+	for (x = xmin; x <= xmax; ++x)
+		printf("-");
+	printf("--\n");
+
 	for (y = ymin; y <= ymax; ++y)
 	{
+		printf("|");
 		for (x = xmin; x <= xmax; ++x)
 		{
 			if (x == xbot && y == ybot)
 				printf("D");
+			else if (x == X0 && y == Y0)
+				printf("+");
 			else
-				switch (maze[i])
+				switch (maze[getindex(x, y)])
 				{
 					case TODO  : printf(" "); break;
 					case WALL  : printf("#"); break;
 					case EMPTY : printf("."); break;
 					case TARGET: printf("X"); break;
 				}
-			++i;
 		}
-		printf("\n");
+		printf("|\n");
 	}
+
+	for (x = xmin; x <= xmax; ++x)
+		printf("-");
+	printf("--\n");
+}
+
+// Draw maze
+void drawmaze(void)
+{
+	drawpartial(0, 0, XDIM - 1, YDIM - 1);
 }
 
 int getindex(int x, int y)
@@ -500,7 +515,7 @@ void makemove(int resp)
 	}
 
 	i = getindex(x, y);
-	if (i < 0 || i >= XDIM * YDIM)
+	if (i < 0 || i >= XDIM * YDIM || x < 0 || x >= XDIM || y < 0 || y >= YDIM)
 	{
 		#ifdef DEBUG
 		drawmaze();
@@ -514,11 +529,16 @@ void makemove(int resp)
 	{
 		xbot = x;
 		ybot = y;
+		++steps;
 	}
 	if (resp == TARGET)
 	{
-		drawmaze();
-		printf("Found target at %d,%d\n", x, y);
+		//drawmaze();
+		//printf("Found target at %d,%d\n", x, y);
+		//printf("%d steps from %d,%d\n", steps, X0, Y0);
+		drawpartial(X0, Y0, x, y);
+		steps = abs(x - X0) + abs(y - Y0);
+		printf("min steps: %d\n", steps);
 		exit(0);
 	}
 	for (m = NORTH; m <= EAST; ++m)
