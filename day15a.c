@@ -16,13 +16,19 @@
 
 #include <stdio.h>   // fopen, fgetc, getdelim, printf
 #include <stdlib.h>  // atoi, atol
+#include <ctype.h>   // isdigit
 #include <time.h>    // time for srand
+#include <string.h>  // strcpy
 
 #define DEBUG
-#define PAD 1000  // storage space to add at end of program
-#define RESUME 0
-#define RESET  1
 
+// Virtual machine operation
+#define VM_FNLEN  32  // max file name length of program on disk
+#define VM_PAD  1000  // storage space to add at end of program
+#define VM_RESUME  0
+#define VM_RESET   1
+
+// Error codes
 #define ERR_OK               0
 #define ERR_OPCODE_UNKNOWN   1
 #define ERR_OPCODE_UNDEFINED 2
@@ -31,372 +37,277 @@
 #define ERR_SEGFAULT_WRITE   5
 #define ERR_SEGFAULT_OTHER   6
 
-// Opcodes
-#define ADD  1L  // add
-#define MUL  2L  // multiply
-#define IN   3L  // get input
-#define OUT  4L  // send output
-#define JNZ  5L  // jump non-zero
-#define JZ   6L  // jump zero
-#define LT   7L  // compare less than
-#define EQ   8L  // compare equal
-#define RBO  9L  // relative base offset
-#define HLT 99L  // return (halt)
+// CPU opcodes
+#define CPU_ADD  1L  // add
+#define CPU_MUL  2L  // multiply
+#define CPU_IN   3L  // get input
+#define CPU_OUT  4L  // send output
+#define CPU_JNZ  5L  // jump non-zero
+#define CPU_JZ   6L  // jump zero
+#define CPU_LT   7L  // compare less than
+#define CPU_EQ   8L  // compare equal
+#define CPU_RBO  9L  // relative base offset
+#define CPU_HLT 99L  // return (halt)
 
-// Parameters
-#define POS  0L  // positional
-#define IMM  1L  // immediate
-#define OFF  2L  // offset
-#define ARG  3L  // max number of parameters per opcode
-
-// FIFO operation
-#define FIFOLEN  5000  // length of the FIFO buffer
-#define INOUT_BOTH  0  // first try FIFO buffer, then terminal
-#define INOUT_FIFO  1  // only try FIFO buffer input/output
-#define INOUT_TERM  2  // only do terminal input/output
-#define FLUSH_HIDE  0  // don't print to term when flushing
-#define FLUSH_SHOW  1  // print flushed values to terminal
+// Opcode parameters
+#define PAR_POS 0L  // positional
+#define PAR_IMM 1L  // immediate
+#define PAR_OFF 2L  // offset
+#define PAR_MAX 3L  // max number of parameters per opcode
 
 // Game
-#define NORTH  1
-#define SOUTH  2
-#define WEST   3
-#define EAST   4
-#define TODO  -1
-#define WALL   0
-#define EMPTY  1
-#define TARGET 2
-#define XDIM  41
-#define YDIM  40
-#define X0    21
-#define Y0    20
+#define MAZE_NODIR  0
+#define MAZE_NORTH  1
+#define MAZE_SOUTH  2
+#define MAZE_WEST   3
+#define MAZE_EAST   4
+#define MAZE_VOID  -1
+#define MAZE_WALL   0
+#define MAZE_FREE   1
+#define MAZE_DEST   2
+#define MAZE_DIMX  41
+#define MAZE_DIMY  40
+#define MAZE_X0    21
+#define MAZE_Y0    20
 
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
-// Location of program on disk
-static const char *inp = "inp15.txt";
+// Language entries (instruction definition)
+typedef struct Instr {
+	int opcode;
+	int read, write;
+} INSTR;
 
-typedef struct Coor {
-	int x, y;
-} COOR, *PCOOR;
-
-// Input/output values + counter
-typedef struct Dict {
-	int key;
-	long val;
-} DICT, *PDICT;
-
-// Language entries
-typedef struct Lang {
-	long op;
-	int rp, wp;
-} LANG;
-
-// Language definition: { opcode, read count, write count }
+// Language definition: { opcode, read par count, write par count }
 // Every read parameter can be positional or immediate
 // Write parameters are always positional
-static const LANG lang[] = {
-	{ ADD, 2, 1 },
-	{ MUL, 2, 1 },
-	{ IN , 0, 1 },
-	{ OUT, 1, 0 },
-	{ JNZ, 2, 0 },
-	{ JZ , 2, 0 },
-	{ LT , 2, 1 },
-	{ EQ , 2, 1 },
-	{ RBO, 1, 0 },
-	{ HLT, 0, 0 }
+static const INSTR cpu[] = {
+	{ CPU_ADD, 2, 1 },
+	{ CPU_MUL, 2, 1 },
+	{ CPU_IN , 0, 1 },
+	{ CPU_OUT, 1, 0 },
+	{ CPU_JNZ, 2, 0 },
+	{ CPU_JZ , 2, 0 },
+	{ CPU_LT , 2, 1 },
+	{ CPU_EQ , 2, 1 },
+	{ CPU_RBO, 1, 0 },
+	{ CPU_HLT, 0, 0 }
 };
-static const int langsize = sizeof lang / sizeof *lang;
+static const int cpusize = sizeof cpu / sizeof *cpu;
 
 ////////// Globals ////////////////////////////////////////////////////////////
 
-static DICT fifobuf[FIFOLEN];
-static int fifohead = 0, fifotail = 0, fifosize = 0;
+// Virtual machine
+static char vm_filename[VM_FNLEN + 1];
+static long *vm_cache = NULL, *vm_memory = NULL;
+static int vm_cachesize = 0, vm_memorysize = 0;
 
-static long *dat = NULL, *mem = NULL;
-static int datsize = 0, memsize = 0;
-
-static int xbot = X0, ybot = Y0;
-static int xtarget = -1, ytarget = -1;
-static int move = NORTH, steps = 0;
-static int maze[XDIM * YDIM];
+// Puzzle 15
+static int orientation = 0, steps = 0;
+static int droidx = MAZE_X0, droidy = MAZE_Y0;
+static int destx = -1, desty = -1;
+static int maze[MAZE_DIMX * MAZE_DIMY];
 
 ////////// Function Declarations //////////////////////////////////////////////
 
-int fifo_pop(PDICT);
-int fifo_push(DICT);
-int fifo_flush(int);
-void output(long, int);
-long input(int);
-int sizecsv(void);
-int readcsv(void);
-void copyprog(void);
-int execprog(int);
-void drawpartial(int, int, int, int);
-void drawmaze(void);
-int getindex(int, int);
-COOR getpos(int);
-int reverse(int);
-int peek(int);
+int aoc_thispuzzle(char **);
+void aoc_setfilename(int);
+int aoc_csvfields(void);
+int aoc_csv2cache(void);
+void vm_refresh(void);
+int vm_exec(int);
+long vm_input(void);
+void vm_output(long);
+
+// Maze functions
+int maze_index(int, int);
+int maze_peek(int, int, int);
+int maze_deadend(int, int);
+int maze_reverse(int);
+void maze_draw(void);
+/*
 void makemove(int);
+*/
 
 ////////// Function Definitions ///////////////////////////////////////////////
 
-// Retrieve value from FIFO buffer
-// Ret: 1=success, 0=buffer empty
-int fifo_pop(PDICT a)
+int aoc_thispuzzle(char **exe)
 {
-	if (!fifosize)
-	{
-		#ifdef DEBUG
-		printf("Can't pop from empty buffer\n");
-		#endif
-		return 0;
-	}
-	*a = fifobuf[fifotail];
-	fifotail = (fifotail + 1) % FIFOLEN;
-	--fifosize;
-	return 1;
+	char *pc;
+	int c;
+
+	pc = *exe;
+	while ((c = *pc) && !isdigit(c))
+		++pc;
+	return atoi(pc);
 }
 
-// Save value to FIFO buffer
-// Ret: 1=success, 0=buffer full
-int fifo_push(DICT a)
+void aoc_setfilename(int num)
 {
-	if (fifosize == FIFOLEN)
-	{
-		#ifdef DEBUG
-		printf("Can't push to full buffer\n");
-		#endif
-		return 0;
-	}
-	fifobuf[fifohead] = a;
-	fifohead = (fifohead + 1) % FIFOLEN;
-	++fifosize;
-	return 1;
-}
+	static const char *test = "test.txt";
+	static const char *fmt = "inp%d.txt";
 
-// Empty the FIFO buffer
-// Arg: 1=print key/val to terminal, 0=don't print
-// Ret: number of values cleared
-int fifo_flush(int print)
-{
-	DICT a;
-	int old;
-
-	if ((old = fifosize))
-	{
-		if (print)
-		{
-			while (fifosize)
-				if (fifo_pop(&a))
-					output(a.val, INOUT_TERM);
-		} else
-			fifotail = fifohead;
-		fifosize = 0;
-	}
-	return old;
-}
-
-// Process value for output
-// Arg: a = counter + output value
-//      mode 0 = try push to FIFO, then print
-//           1 = only push to FIFO buffer
-//           2 = only print to terminal
-void output(long val, int mode)
-{
-	static int count = 0;
-	int ok = 1;
-
-	if (mode == 0 || mode == 1)
-		ok = fifo_push((DICT){ count, val });
-	if (mode == 2 || (mode == 0 && !ok))
-		printf("%d : %ld\n", count, val);
-	++count;
-}
-
-// Request value for input
-// Arg: mode 0 = try pop from FIFO, then ask
-//           1 = only pop from FIFO buffer
-//           2 = only ask on terminal
-// Ret: counter + input value
-long input(int mode)
-{
-	static int count = 0;
-	char *s = NULL;
-	size_t t = 0;
-	DICT a;
-	long val = -1;
-	int ok = 1;
-
-	if (mode == 0 || mode == 1)
-		if ((ok = fifo_pop(&a)))
-			val = a.val;
-	if (mode == 2 || (mode == 0 && !ok))
-	{
-		printf("%d ? ", count);
-		if (getline(&s, &t, stdin) > 0)
-			val = atol(s);
-		free(s);
-	}
-	++count;
-	return val;
+	if (num)
+		snprintf(vm_filename, VM_FNLEN, fmt, num);
+	else
+		strcpy(vm_filename, test);
 }
 
 // Count values in a one-line CSV file by counting commas + 1
-int sizecsv(void)
+int aoc_csvfields(void)
 {
 	FILE *fp;
-	int ch, i = 0;
+	int c, i = 0;
 
-	if ((fp = fopen(inp, "r")) != NULL)
+	if ((fp = fopen(vm_filename, "r")) != NULL)
 	{
 		i = 1;
-		while ((ch = fgetc(fp)) != EOF)
-			if (ch == ',')
+		while ((c = fgetc(fp)) != EOF)
+			if (c == ',')
 				++i;
 		fclose(fp);
 	}
 	return i;
 }
 
-// Read long integer CSV values from file to array dat
-// Pre: dat must be allocated to size datsize > 0
-//      inp must contain name of readable file
+// Read long integer CSV values from file to cache
+// Pre: vm_cache must be allocated to size vm_cachesize > 0
+//      vm_filename must contain name of readable file
 // Ret: number of values read
-int readcsv(void)
+int aoc_csv2cache(void)
 {
 	FILE *fp;        // file pointer
 	char *s = NULL;  // dynamically allocated buffer
 	size_t t = 0;    // size of buffer
 	int i = 0;       // values read
 
-	if (dat != NULL && datsize > 0 && (fp = fopen(inp, "r")) != NULL)
+	if (vm_cache != NULL && vm_cachesize > 0 &&
+		(fp = fopen(vm_filename, "r")) != NULL)
 	{
-		while (i < datsize && getdelim(&s, &t, ',', fp) > 0)
-			dat[i++] = atol(s);
+		while (i < vm_cachesize && getdelim(&s, &t, ',', fp) > 0)
+			vm_cache[i++] = atol(s);
 		free(s);
 		fclose(fp);
 	}
 	return i;
 }
 
-// Copy program from dat to mem and zero the padding
+// Copy program from cache to memory, and zero the padding
 // Pre: dat must be allocated to size datsize > 0
 //      mem must be allocated to size memsize >= datsize
-void copyprog(void)
+void vm_refresh(void)
 {
 	long *src, *dst;
 	int i;
 
-	if (dat != NULL && mem != NULL && datsize > 0 && datsize <= memsize)
+	if (vm_cache != NULL && vm_memory != NULL &&
+		vm_cachesize > 0 && vm_cachesize <= vm_memorysize)
 	{
-		src = dat;
-		dst = mem;
-		i = datsize;
+		src = vm_cache;
+		dst = vm_memory;
+		i = vm_cachesize;
 		while (i--)
 			*dst++ = *src++;
-		i = memsize - datsize;
+		i = vm_memorysize - vm_cachesize;
 		while (i--)
 			*dst++ = 0;
 	}
 }
 
 // Parse and execute all instructions in memory
-int execprog(int reset)
+int vm_exec(int reset)
 {
-	static long base = 0;
-	static int pc = 0;
-
-	int i, j, k, retval = ERR_OK;
-	long in, op, par[ARG], parmode;
+	static int base = 0;  // "relative base offset"
+	static int ip = 0;    // instruction pointer
+	int instr, opcode, parmode;
+	long par[PAR_MAX];
+	int i, j, k;
 
 	if (reset)
 	{
-		copyprog();
+		vm_refresh();
 		base = 0;
-		pc = 0;
+		ip = 0;
 	}
 
-	while (pc >= 0 && pc < memsize)
+	while (ip >= 0 && ip < vm_memorysize)
 	{
 		// Get opcode and parameter modes from instruction
-		in = mem[pc++];                // get instruction, increment program counter
-		op = in % 100;                 // opcode part of instruction
-		in /= 100;                     // this leaves parameter modes
+		instr = vm_memory[ip++];       // get instruction, increment instr pointer
+		opcode = instr % 100;          // opcode part of instruction
+		instr /= 100;                  // this leaves parameter modes
 
 		// Look up opcode, halt if not found or too long
 		i = 0;
-		while (i < langsize && op != lang[i].op)
+		while (i < cpusize && opcode != cpu[i].opcode)
 			++i;
-		if (i == langsize)             // not in the language def?
+		if (i == cpusize)             // not in the language def?
 		{
 			#ifdef DEBUG
-			printf("Unknown opcode %ld at %d\n", op, pc - 1);
+			printf("Unknown opcode %ld at %d\n", opcode, ip - 1);
 			#endif
 			return ERR_OPCODE_UNKNOWN;
 		}
-		if (pc + lang[i].rp + lang[i].wp > memsize)
+		if (ip + cpu[i].read + cpu[i].write > vm_memorysize)
 		{
 			#ifdef DEBUG
-			printf("Too many parameters for program size at %d\n", pc - 1);
+			printf("Too many parameters for program size at %d\n", ip - 1);
 			#endif
 			return ERR_SEGFAULT_PARAM;
 		}
 
-		// Get read parameter(s)
-		for (j = 0; j < lang[i].rp; ++j)
+		// Get "read" parameter(s)
+		for (j = 0; j < cpu[i].read; ++j)
 		{
-			par[j] = mem[pc++];        // get immediate value param, increment program counter
-			parmode = in % 10;
-			in /= 10;                  // next parameter mode
-			if (parmode != IMM)        // mode = positional or offset parameter?
+			par[j] = vm_memory[ip++];  // get immediate value, increment instr pointer
+			parmode = instr % 10;
+			instr /= 10;               // next parameter mode
+			if (parmode != PAR_IMM)    // par mode = positional or offset?
 			{
-				if (parmode == OFF)
+				if (parmode == PAR_OFF)  // use base offset
 					par[j] += base;
-				if (par[j] < 0 || par[j] >= memsize)
+				if (par[j] < 0 || par[j] >= vm_memorysize)
 				{
 					#ifdef DEBUG
-					printf("Read beyond program size: %ld\n", par[j] - memsize + 1);
+					printf("Read beyond program size: %ld\n", par[j] - vm_memorysize + 1);
 					#endif
 					return ERR_SEGFAULT_READ;
 				}
-				par[j] = mem[par[j]];  // get positional value
+				par[j] = vm_memory[par[j]];  // get positional value
 			}
 		}
 
-		// Get write parameter (always positional/offset but keep the address this time)
-		if (lang[i].wp)
+		// Get "write" parameter (always positional/offset but keep the address this time)
+		if (cpu[i].write)
 		{
-			par[j] = mem[pc++];        // get address param, increment program counter
-			if (in % 10 == OFF)        // mode = offset parameter?
+			par[j] = vm_memory[ip++];   // get address param, increment program counter
+			if (instr % 10 == PAR_OFF)  // par mode = offset?
 				par[j] += base;
-			if (par[j] < 0 || par[j] >= memsize)
+			if (par[j] < 0 || par[j] >= vm_memorysize)
 			{
 				#ifdef DEBUG
-				printf("Write beyond program size: %ld\n", par[j] - memsize + 1);
+				printf("Write beyond program size: %ld\n", par[j] - vm_memorysize + 1);
 				#endif
 				return ERR_SEGFAULT_WRITE;
 			}
 		}
 
-		// Execute
-		switch (op)
+		// Execute instruction
+		switch (opcode)
 		{
-			case ADD: mem[par[2]] = par[0] + par[1];  break;
-			case MUL: mem[par[2]] = par[0] * par[1];  break;
-			case IN : mem[par[0]] = move;             break;
-			case OUT: makemove((int)par[0]);          break;
-			case JNZ: if ( par[0]) pc = par[1];       break;
-			case JZ : if (!par[0]) pc = par[1];       break;
-			case LT : mem[par[2]] = par[0] < par[1];  break;
-			case EQ : mem[par[2]] = par[0] == par[1]; break;
-			case RBO: base += par[0];                 break;
-			case HLT: return retval;
+			case CPU_ADD: vm_memory[par[2]] = par[0] + par[1];  break;
+			case CPU_MUL: vm_memory[par[2]] = par[0] * par[1];  break;
+			case CPU_IN : vm_memory[par[0]] = vm_input();       break;
+			case CPU_OUT: vm_output(par[0]);                    break;
+			case CPU_JNZ: if ( par[0]) ip = par[1];             break;
+			case CPU_JZ : if (!par[0]) ip = par[1];             break;
+			case CPU_LT : vm_memory[par[2]] = par[0] < par[1];  break;
+			case CPU_EQ : vm_memory[par[2]] = par[0] == par[1]; break;
+			case CPU_RBO: base += par[0];                       break;
+			case CPU_HLT: return ERR_OK;
 			default :
 				#ifdef DEBUG
-				printf("Internal error: undefined opcode %ld\n", op);
+				printf("Internal error: undefined opcode %ld\n", opcode);
 				#endif
 				return ERR_OPCODE_UNDEFINED;
 		}
@@ -404,105 +315,120 @@ int execprog(int reset)
 	return ERR_SEGFAULT_OTHER;
 }
 
+// Request value for input
+long vm_input(void)
+{
+	/*
+	static int count = 0;
+	char *s = NULL;
+	size_t t = 0;
+	long val = -1;
+
+	printf("%d ? ", count);
+	if (getline(&s, &t, stdin) > 0)
+		val = atol(s);
+	free(s);
+	count++;
+	return val;
+	*/
+	return orientation;
+}
+
+// Process value for output
+void vm_output(long val)
+{
+	/*
+	static int count = 0;
+
+	printf("%d : %ld\n", count++, val);
+	*/
+}
+
+int maze_index(int x, int y)
+{
+	return y * MAZE_DIMX + x;
+}
+
+int maze_peek(int x, int y, int dir)
+{
+	int i = -1;  // illegal index
+
+	switch (dir)
+	{
+		case MAZE_NORTH: i = maze_index(x, y - 1); break;
+		case MAZE_SOUTH: i = maze_index(x, y + 1); break;
+		case MAZE_WEST : i = maze_index(x - 1, y); break;
+		case MAZE_EAST : i = maze_index(x + 1, y); break;
+	}
+	if (i >= 0 && i < MAZE_DIMX * MAZE_DIMY)  // legal index?
+		return maze[i];
+	return MAZE_WALL;
+}
+
+int maze_deadend(int x, int y)
+{
+	int dir, wallcount = 0;
+
+	for (dir = MAZE_NORTH; dir <= MAZE_EAST; ++dir)
+		if (maze_peek(x, y, dir) == MAZE_WALL)
+			++wallcount;
+	return wallcount >= 3;
+}
+
+int maze_reverse(int dir)
+{
+	int rev = MAZE_NODIR;
+
+	switch (dir)
+	{
+		case MAZE_NORTH: rev = MAZE_SOUTH; break;
+		case MAZE_SOUTH: rev = MAZE_NORTH; break;
+		case MAZE_WEST : rev = MAZE_EAST;  break;
+		case MAZE_EAST : rev = MAZE_WEST;  break;
+	}
+	return rev;
+}
+
 // Draw maze
-void drawpartial(int xmin, int ymin, int xmax, int ymax)
+void maze_draw(void)
 {
 	int x, y;
 
-	if (xmin > xmax)
-	{
-		x = xmin;
-		xmin = xmax;
-		xmax = x;
-	}
-	if (ymin > ymax)
-	{
-		y = ymin;
-		ymin = ymax;
-		ymax = y;
-	}
-
 	//printf("\033[2J");  // clear screen
-	for (x = xmin; x <= xmax; ++x)
+	for (x = 0; x < MAZE_DIMX; ++x)
 		printf("-");
 	printf("--\n");
 
-	for (y = ymin; y <= ymax; ++y)
+	for (y = 0; y < MAZE_DIMY; ++y)
 	{
 		printf("|");
-		for (x = xmin; x <= xmax; ++x)
+		for (x = 0; x < MAZE_DIMX; ++x)
 		{
-			if (x == xbot && y == ybot)
-				printf("D");
-			else if (x == X0 && y == Y0)
+			if (x == droidx && y == droidy)
+				printf("o");
+			else if (x == MAZE_X0 && y == MAZE_Y0)
 				printf("+");
 			else
-				switch (maze[getindex(x, y)])
+				switch (maze[maze_index(x, y)])
 				{
-					case TODO  : printf(" "); break;
-					case WALL  : printf("#"); break;
-					case EMPTY : printf("."); break;
-					case TARGET: printf("X"); break;
+					case MAZE_VOID: printf(" "); break;
+					case MAZE_WALL: printf("#"); break;
+					case MAZE_FREE: printf("."); break;
+					case MAZE_DEST: printf("X"); break;
 				}
 		}
 		printf("|\n");
 	}
 
-	for (x = xmin; x <= xmax; ++x)
+	for (x = 0; x < MAZE_DIMX; ++x)
 		printf("-");
 	printf("--\n");
 }
 
-// Draw maze
-void drawmaze(void)
-{
-	drawpartial(0, 0, XDIM - 1, YDIM - 1);
-}
-
-int getindex(int x, int y)
-{
-	return y * XDIM + x;
-}
-
-COOR getpos(int ix)
-{
-	return (COOR){ ix % XDIM, ix / XDIM };
-}
-
-int reverse(int dir)
-{
-	int r = 0;
-
-	switch (dir)
-	{
-		case NORTH: r = SOUTH; break;
-		case SOUTH: r = NORTH; break;
-		case WEST : r = EAST;  break;
-		case EAST : r = WEST;  break;
-	}
-	return r;
-}
-
-int peek(int dir)
-{
-	int i = -1;
-
-	switch (dir)
-	{
-		case NORTH: i = getindex(xbot, ybot - 1); break;
-		case SOUTH: i = getindex(xbot, ybot + 1); break;
-		case WEST : i = getindex(xbot - 1, ybot); break;
-		case EAST : i = getindex(xbot + 1, ybot); break;
-	}
-	if (i >= 0 && i < XDIM * YDIM)
-		return maze[i];
-	else
-		return WALL;
-}
-
+/*
 void makemove(int resp)
 {
-	int i, m, r, skip, x = xbot, y = ybot;
+	int i, m, x = droidx, y = droidy;
 	int todo[4], todocount = 0;
 	int been[4], beencount = 0;
 
@@ -581,30 +507,39 @@ void makemove(int resp)
 	}
 	move = m;
 }
+*/
 
 ////////// Main ///////////////////////////////////////////////////////////////
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	int i, len, ret;
 
+	// Init AoC
 	srand(time(NULL));
-	for (i = 0; i < XDIM * YDIM; ++i)
-		maze[i] = TODO;
+	aoc_setfilename(thispuzzle(argv));
 
-	if ((len = sizecsv()) > 0)
+	// Init maze
+	for (i = 0; i < MAZE_DIMX * MAZE_DIMY; ++i)
+		maze[i] = MAZE_VOID;
+
+	// Check program data
+	if ((len = aoc_csvfields()) > 0)
 	{
-		datsize = len;
-		memsize = len + PAD;
-		dat = malloc(datsize * sizeof *dat);
-		mem = malloc(memsize * sizeof *mem);
-		if (dat != NULL && mem != NULL && readcsv() == len)
+		// Allocate memory
+		vm_cachesize  = len;
+		vm_memorysize = len + VM_PAD;
+		vm_cache  = malloc(vm_cachesize  * sizeof *vm_cache );
+		vm_memory = malloc(vm_memorysize * sizeof *vm_memory);
+		// Read into memory
+		if (vm_cache != NULL && vm_memory != NULL && aoc_csv2cache() == len)
 		{
-			ret = execprog(RESET);
-			printf("ret = %d\n", ret);
+			// Run program
+			if ((ret = vm_exec(VM_RESET)) != ERR_OK)
+				printf("Error: %d\n", ret);
 		}
-		free(mem);
-		free(dat);
+		free(vm_memory);
+		free(vm_cache);
 	}
-	return 0;
+	return ERR_OK;
 }
