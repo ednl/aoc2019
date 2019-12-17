@@ -95,8 +95,6 @@ static const INSTR cpu[] = {
 };
 static const int cpusize = sizeof cpu / sizeof *cpu;
 
-static const char *maze_sol = "R,12,L,10,L,10,L,6,L,12,R,12,L,4,R,12,L,10,L,10,L,6,L,12,";
-
 ////////// Globals ////////////////////////////////////////////////////////////
 
 // Virtual machine
@@ -123,13 +121,16 @@ void vm_output(long);
 // Maze functions
 char maze_dir2char(int);
 int maze_char2dir(char);
+int maze_turnleft(int);
+int maze_turnright(int);
 int maze_index(int, int);
 int maze_peek(int, int, int);
+int maze_freeahead(int, int, int);
+int maze_freeleft(int, int, int);
+int maze_freeright(int, int, int);
+int maze_free(int, int, int);
 int maze_alignment(int, int);
 int maze_calibration(void);
-int maze_deadend(int, int);
-// int maze_reverse(int);
-// void maze_draw(void);
 
 ////////// Function Definitions ///////////////////////////////////////////////
 
@@ -325,45 +326,57 @@ int vm_exec(int reset)
 // Request value for input
 long vm_input(void)
 {
+	/*
+	A	R,12,L,10,L,10
+	B	L,6,L,12,R,12,L,4
+	A	R,12,L,10,L,10
+	B	L,6,L,12,R,12,L,4
+	C	L,12,R,12,L,6
+	B	L,6,L,12,R,12,L,4
+	C	L,12,R,12,L,6
+	A	R,12,L,10,L,10
+	C	L,12,R,12,L,6
+	C	L,12,R,12,L,6
+	A,B,A,B,C,B,C,A,C,C
+	R,12,L,10,L,10
+	L,6,L,12,R,12,L,4
+	L,12,R,12,L,6
+	1119775
+	*/
+	static const char *s = "A,B,A,B,C,B,C,A,C,C\nR,12,L,10,L,10\nL,6,L,12,R,12,L,4\nL,12,R,12,L,6\nn\n";
 	static int count = 0;
-	char *s = NULL;
-	size_t t = 0;
-	long val = -1;
-
-	printf("%d ? ", count);
-	if (getline(&s, &t, stdin) > 0)
-		val = atol(s);
-	free(s);
-	count++;
-	return val;
+	return s[count++];
 }
 
 // Process value for output
 void vm_output(long val)
 {
 	static int i = 0;
-	char c = (char)val;
+	char c;
 
-	printf("%c", c);
-	if (i < MAZE_DIMX * MAZE_DIMY)
+	if (val >= 0 && val <= 127)
 	{
-		switch (c)
+		c = (char)val;
+		printf("%c", c);
+		if (i < MAZE_DIMX * MAZE_DIMY)
 		{
-			case '.': maze[i] = MAZE_WALL; break;
-			case '#': maze[i] = MAZE_FREE; break;
-			case '^':
-			case 'v':
-			case '<':
-			case '>':
-				orientation = maze_char2dir(c);
-				maze[i] = MAZE_FREE;
-				droidx = i % MAZE_DIMX;
-				droidy = i / MAZE_DIMX;
-				break;
-			default: --i; break;
+			switch (c)
+			{
+				case '.': maze[i++] = MAZE_WALL; break;
+				case '#': maze[i++] = MAZE_FREE; break;
+				case '^':
+				case 'v':
+				case '<':
+				case '>':
+					droidx = i % MAZE_DIMX;
+					droidy = i / MAZE_DIMX;
+					orientation = maze_char2dir(c);
+					maze[i++] = MAZE_FREE;
+					break;
+			}
 		}
-		++i;
-	}
+	} else
+		printf("%ld\n", val);
 }
 
 char maze_dir2char(int dir)
@@ -391,39 +404,24 @@ int maze_char2dir(char c)
 
 int maze_turnleft(int dir)
 {
-	int left = MAZE_NODIR;
-
 	switch (dir)
 	{
-		case MAZE_NORTH: left = MAZE_WEST;  break;
-		case MAZE_SOUTH: left = MAZE_EAST;  break;
-		case MAZE_WEST : left = MAZE_SOUTH; break;
-		case MAZE_EAST : left = MAZE_NORTH; break;
+		case MAZE_NORTH: dir = MAZE_WEST;  break;
+		case MAZE_SOUTH: dir = MAZE_EAST;  break;
+		case MAZE_WEST : dir = MAZE_SOUTH; break;
+		case MAZE_EAST : dir = MAZE_NORTH; break;
 	}
-	return left;
+	return dir;
 }
 
 int maze_turnright(int dir)
 {
-	int right = MAZE_NODIR;
-
 	switch (dir)
 	{
-		case MAZE_NORTH: right = MAZE_EAST;  break;
-		case MAZE_SOUTH: right = MAZE_WEST;  break;
-		case MAZE_WEST : right = MAZE_NORTH; break;
-		case MAZE_EAST : right = MAZE_SOUTH; break;
-	}
-	return right;
-}
-
-int maze_newdir(int x, int y, int olddir)
-{
-	int dir = olddir;
-
-	if (maze_peek(x, y, dir) == MAZE_WALL)
-	{
-		if maze_peek(x, y, (dir = maze_turnleft())
+		case MAZE_NORTH: dir = MAZE_EAST;  break;
+		case MAZE_SOUTH: dir = MAZE_WEST;  break;
+		case MAZE_WEST : dir = MAZE_NORTH; break;
+		case MAZE_EAST : dir = MAZE_SOUTH; break;
 	}
 	return dir;
 }
@@ -441,14 +439,43 @@ int maze_peek(int x, int y, int dir)
 		return MAZE_VOID;
 	switch (dir)
 	{
-		case MAZE_NORTH: i = maze_index(x, y - 1); break;
-		case MAZE_SOUTH: i = maze_index(x, y + 1); break;
-		case MAZE_WEST : i = maze_index(x - 1, y); break;
-		case MAZE_EAST : i = maze_index(x + 1, y); break;
+		case MAZE_NORTH: y--; break;
+		case MAZE_SOUTH: y++; break;
+		case MAZE_WEST : x--; break;
+		case MAZE_EAST : x++; break;
 	}
+	if (x < 0 || y < 0 || x >= MAZE_DIMX || y >= MAZE_DIMY)
+		return MAZE_VOID;
+	i = maze_index(x, y);
 	if (i >= 0 && i < MAZE_DIMX * MAZE_DIMY)  // legal index?
 		return maze[i];
 	return MAZE_VOID;
+}
+
+int maze_freeahead(int x, int y, int dir)
+{
+	return maze_peek(x, y, dir) == MAZE_FREE;
+}
+
+int maze_freeleft(int x, int y, int dir)
+{
+	return maze_peek(x, y, maze_turnleft(dir)) == MAZE_FREE;
+}
+
+int maze_freeright(int x, int y, int dir)
+{
+	return maze_peek(x, y, maze_turnright(dir)) == MAZE_FREE;
+}
+
+int maze_free(int x, int y, int dir)
+{
+	if (maze_freeahead(x, y, dir))
+		return 1;
+	if (maze_freeleft(x, y, dir))
+		return 2;
+	if (maze_freeright(x, y, dir))
+		return 3;
+	return 0;
 }
 
 int maze_alignment(int x, int y)
@@ -476,66 +503,6 @@ int maze_calibration(void)
 	return sum;
 }
 
-int maze_deadend(int x, int y)
-{
-	int dir, wallcount = 0;
-
-	for (dir = MAZE_NORTH; dir <= MAZE_EAST; ++dir)
-		if (maze_peek(x, y, dir) == MAZE_WALL)
-			++wallcount;
-	return wallcount >= 3;
-}
-
-// int maze_reverse(int dir)
-// {
-// 	int rev = MAZE_NODIR;
-
-// 	switch (dir)
-// 	{
-// 		case MAZE_NORTH: rev = MAZE_SOUTH; break;
-// 		case MAZE_SOUTH: rev = MAZE_NORTH; break;
-// 		case MAZE_WEST : rev = MAZE_EAST;  break;
-// 		case MAZE_EAST : rev = MAZE_WEST;  break;
-// 	}
-// 	return rev;
-// }
-
-// Draw maze
-// void maze_draw(void)
-// {
-// 	int x, y;
-
-// 	//printf("\033[2J");  // clear screen
-// 	for (x = 0; x < MAZE_DIMX; ++x)
-// 		printf("-");
-// 	printf("--\n");
-
-// 	for (y = 0; y < MAZE_DIMY; ++y)
-// 	{
-// 		printf("|");
-// 		for (x = 0; x < MAZE_DIMX; ++x)
-// 		{
-// 			if (x == droidx && y == droidy)
-// 				printf("o");
-// 			else if (x == MAZE_X0 && y == MAZE_Y0)
-// 				printf("+");
-// 			else
-// 				switch (maze[maze_index(x, y)])
-// 				{
-// 					case MAZE_VOID: printf(" "); break;
-// 					case MAZE_WALL: printf("#"); break;
-// 					case MAZE_FREE: printf("."); break;
-// 					case MAZE_DEST: printf("X"); break;
-// 				}
-// 		}
-// 		printf("|\n");
-// 	}
-
-// 	for (x = 0; x < MAZE_DIMX; ++x)
-// 		printf("-");
-// 	printf("--\n");
-// }
-
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[])
@@ -561,40 +528,45 @@ int main(int argc, char *argv[])
 		// Read into memory
 		if (vm_cache != NULL && vm_memory != NULL && aoc_csv2cache() == len)
 		{
-			// Run program
+			// Run program, part one
 			if ((ret = vm_exec(VM_RESET)) != ERR_OK)
 				printf("Error: %d\n", ret);
 			printf("droid: %d,%d %c\n", droidx, droidy, maze_dir2char(orientation));
 			printf("calibration: %d\n", maze_calibration());
-			printf("%d\n", maze_deadend(4, 28));
 			printf("solution: ");
-			do
+			while ((d = maze_free(droidx, droidy, orientation)))
 			{
-				if (maze_peek(droidx, droidy, (d = maze_dirleft(orientation))) == MAZE_FREE)
+				if (d == 1)
 				{
-					orientation = d;
+					i = 0;
+					while (maze_freeahead(droidx, droidy, orientation))
+					{
+						switch (orientation)
+						{
+							case MAZE_NORTH: droidy--; break;
+							case MAZE_SOUTH: droidy++; break;
+							case MAZE_WEST : droidx--; break;
+							case MAZE_EAST : droidx++; break;
+						}
+						++i;
+					}
+					printf("%d,", i);
+				} else if (d == 2)
+				{
+					orientation = maze_turnleft(orientation);
 					printf("L,");
-				}
-				else if (maze_peek(droidx, droidy, (d = maze_dirright(orientation))) == MAZE_FREE)
+				} else if (d == 3)
 				{
-					orientation = d;
+					orientation = maze_turnright(orientation);
 					printf("R,");
 				}
-				i = 0;
-				while (maze_peek(droidx, droidy, orientation) == MAZE_FREE)
-				{
-					switch (orientation)
-					{
-						case MAZE_NORTH: droidy--; break;
-						case MAZE_SOUTH: droidy++; break;
-						case MAZE_WEST : droidx--; break;
-						case MAZE_EAST : droidx++; break;
-					}
-					++i;
-				}
-				printf("%d,", i);
-			} while (i && !maze_deadend(droidx, droidy));
-			printf("\n");
+			}
+			printf("\033[D\033[K\n");
+
+			// Run program, part two
+			vm_cache[0] = 2;  // enable clean-up
+			if ((ret = vm_exec(VM_RESET)) != ERR_OK)
+				printf("Error: %d\n", ret);
 		}
 		free(vm_memory);
 		free(vm_cache);
