@@ -389,7 +389,7 @@ int maze_char2dir(char c)
 	return dir;
 }
 
-int maze_dirleft(int dir)
+int maze_turnleft(int dir)
 {
 	int left = MAZE_NODIR;
 
@@ -403,7 +403,7 @@ int maze_dirleft(int dir)
 	return left;
 }
 
-int maze_dirright(int dir)
+int maze_turnright(int dir)
 {
 	int right = MAZE_NODIR;
 
@@ -415,6 +415,17 @@ int maze_dirright(int dir)
 		case MAZE_EAST : right = MAZE_SOUTH; break;
 	}
 	return right;
+}
+
+int maze_newdir(int x, int y, int olddir)
+{
+	int dir = olddir;
+
+	if (maze_peek(x, y, dir) == MAZE_WALL)
+	{
+		if maze_peek(x, y, (dir = maze_turnleft())
+	}
+	return dir;
 }
 
 int maze_index(int x, int y)
