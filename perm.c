@@ -34,6 +34,7 @@ void perm2(int n, int k)
 {
 	static int u[] = {0,0,0,0,0,0,0,0,0,0};  // index of used elements
 	static int r[] = {0,0,0,0,0,0,0,0,0,0};  // permutation result
+	static int p = 0;
 	int i;
 
 	for (i = 0; i < n; ++i)
@@ -51,6 +52,7 @@ void perm2(int n, int k)
 			// Do something with the permutation
 			// (must be done here because recursive function
 			// still only returns once to parent)
+			printf("%d: ", p++);
 			for (i = 0; i < n; ++i)
 				printf("%d", r[i]);
 			printf("\n");
@@ -60,6 +62,6 @@ void perm2(int n, int k)
 
 int main(void)
 {
-	perm2(3, 0);
+	perm2(5, 0);
 	return 0;
 }
