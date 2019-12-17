@@ -1,11 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////
-//
-// Advent of Code 2019
-// Day 6: Universal Orbit Map, part two
-//
-// E. Dronkert
-// https://github.com/ednl/aoc2019
-//
+////
+////  Advent of Code 2019
+////  Day 6: Universal Orbit Map, part two
+////
+////  E. Dronkert
+////  https://github.com/ednl/aoc2019
+////
 ///////////////////////////////////////////////////////////////////////////////
 
 ////////// Includes & Defines /////////////////////////////////////////////////
@@ -13,6 +13,9 @@
 #include <stdio.h>   // fopen, fclose, getline
 #include <stdlib.h>  // malloc, free
 #include <ctype.h>   // isalnum
+
+#define YOU (128 * (128 * 'Y' + 'O') + 'U')
+#define SAN (128 * (128 * 'S' + 'A') + 'N')
 
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
@@ -87,17 +90,59 @@ void findparents(PORBIT a, int n)
 
 int countorbits(PORBIT a, int n)
 {
-	int i, p, k, sum = 0;
+	int i, j, k = 0;
 
-	for (i = 0; i < n; ++i)
+	while (n--)
 	{
-		p = i;
-		k = 1;  // every entry already is 1 orbit!
-		while ((p = a[p].parent) >= 0)
-			++k;
-		sum += k;
+		i = n;   // follow parents to CoM
+		j = 1;   // every entry already is 1 orbit
+		while ((i = a[i].parent) >= 0)
+			++j;
+		k += j;  // total
 	}
-	return sum;
+	return k;
+}
+
+int findinorbit(PORBIT a, int n, int p)
+{
+	while (n--)
+		if (a[n].inorbit == p)
+			break;
+	return n;
+}
+
+int you2san(PORBIT a, int n)
+{
+	int i, j, p, *toyou = NULL, *tosan = NULL, steps = 0;
+
+	toyou = malloc(n * sizeof *toyou);
+	tosan = malloc(n * sizeof *tosan);
+	if (toyou != NULL && tosan != NULL)
+	{
+		i = 0;
+		p = findinorbit(a, n, YOU);
+		while (i < n && p >= 0)
+		{
+			toyou[i++] = p;
+			p = a[p].parent;
+		}
+
+		j = 0;
+		p = findinorbit(a, n, SAN);
+		while (j < n && p >= 0)
+		{
+			tosan[j++] = p;
+			p = a[p].parent;
+		}
+
+		while (i-- && j-- && toyou[i] == tosan[j])
+			;
+		if (i >= 0 && j >= 0)
+			steps = i + j;
+	}
+	free(toyou);
+	free(tosan);
+	return steps;
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
@@ -114,7 +159,7 @@ int main(void)
 			if (read(orb, len) == len)
 			{
 				findparents(orb, len);
-				printf("%d\n", countorbits(orb, len));
+				printf("%d\n", you2san(orb, len));
 			}
 			free(orb);
 		}

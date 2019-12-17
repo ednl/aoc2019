@@ -1,10 +1,12 @@
-/******************************************************************************
- * Advent of Code 2019
- * Day 1a: rocket fuel for modules
- *
- * E. Dronkert
- * https://github.com/ednl/aoc2019
- *****************************************************************************/
+///////////////////////////////////////////////////////////////////////////////
+////
+////  Advent of Code 2019
+////  Day 1: The Tyranny of the Rocket Equation, part one
+////
+////  E. Dronkert
+////  https://github.com/ednl/aoc2019
+////
+///////////////////////////////////////////////////////////////////////////////
 
 #include <stdio.h>   // fopen, fgets, printf
 #include <stdlib.h>  // atoi

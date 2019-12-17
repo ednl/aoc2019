@@ -1,9 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////
-// Advent of Code 2019
-// Day 13: Care Package
-//
-// E. Dronkert
-// https://github.com/ednl/aoc2019
+////
+////  Advent of Code 2019
+////  Day 11: Space Police
+////
+////  E. Dronkert
+////  https://github.com/ednl/aoc2019
+////
 ///////////////////////////////////////////////////////////////////////////////
 
 ////////// Includes & Defines /////////////////////////////////////////////////
@@ -47,31 +49,12 @@
 #define OFF  2L  // offset
 #define ARG  3L  // max number of parameters per opcode
 
-// FIFO operation
-#define FIFOLEN  5000  // length of the FIFO buffer
-#define INOUT_BOTH  0  // first try FIFO buffer, then terminal
-#define INOUT_FIFO  1  // only try FIFO buffer input/output
-#define INOUT_TERM  2  // only do terminal input/output
-#define FLUSH_HIDE  0  // don't print to term when flushing
-#define FLUSH_SHOW  1  // print flushed values to terminal
-
-// Game
-#define TILE_EMPTY  0
-#define TILE_WALL   1
-#define TILE_BLOCK  2
-#define TILE_PADDLE 3
-#define TILE_BALL   4
+#define RADIUS 100
 
 ////////// Typedefs & Constants ///////////////////////////////////////////////
 
 // Location of program on disk
-static const char *inp = "inp13.txt";
-
-// Input/output values + counter
-typedef struct Dict {
-	int key;
-	long val;
-} DICT, *PDICT;
+static const char *inp = "inp11.txt";
 
 // Language entries
 typedef struct Lang {
@@ -98,127 +81,42 @@ static const int langsize = sizeof lang / sizeof *lang;
 
 ////////// Globals ////////////////////////////////////////////////////////////
 
-static DICT fifobuf[FIFOLEN];
-static int fifohead = 0, fifotail = 0, fifosize = 0;
-
 static long *dat = NULL, *mem = NULL;
 static int datsize = 0, memsize = 0;
 
-static long ball = 0, paddle = 0;
+static int panel[RADIUS * 2 + 1];
 
 ////////// Function Declarations //////////////////////////////////////////////
 
-int fifo_pop(PDICT);
-int fifo_push(DICT);
-int fifo_flush(int);
-void output(long, int);
-long input(int);
+void output(long);
+long input(void);
 int sizecsv(void);
 int readcsv(void);
 void copyprog(void);
 int execprog(int);
-void drawtile(int, int, int);
+void paint(long col, long dir);
 
 ////////// Function Definitions ///////////////////////////////////////////////
 
-// Retrieve value from FIFO buffer
-// Ret: 1=success, 0=buffer empty
-int fifo_pop(PDICT a)
-{
-	if (!fifosize)
-	{
-		#ifdef DEBUG
-		printf("Can't pop from empty buffer\n");
-		#endif
-		return 0;
-	}
-	*a = fifobuf[fifotail];
-	fifotail = (fifotail + 1) % FIFOLEN;
-	--fifosize;
-	return 1;
-}
-
-// Save value to FIFO buffer
-// Ret: 1=success, 0=buffer full
-int fifo_push(DICT a)
-{
-	if (fifosize == FIFOLEN)
-	{
-		#ifdef DEBUG
-		printf("Can't push to full buffer\n");
-		#endif
-		return 0;
-	}
-	fifobuf[fifohead] = a;
-	fifohead = (fifohead + 1) % FIFOLEN;
-	++fifosize;
-	return 1;
-}
-
-// Empty the FIFO buffer
-// Arg: 1=print key/val to terminal, 0=don't print
-// Ret: number of values cleared
-int fifo_flush(int print)
-{
-	DICT a;
-	int old;
-
-	if ((old = fifosize))
-	{
-		if (print)
-		{
-			while (fifosize)
-				if (fifo_pop(&a))
-					output(a.val, INOUT_TERM);
-		} else
-			fifotail = fifohead;
-		fifosize = 0;
-	}
-	return old;
-}
-
 // Process value for output
-// Arg: a = counter + output value
-//      mode 0 = try push to FIFO, then print
-//           1 = only push to FIFO buffer
-//           2 = only print to terminal
-void output(long val, int mode)
+// Arg: val = output value
+void output(long val)
 {
-	static int count = 0;
-	int ok = 1;
-
-	if (mode == 0 || mode == 1)
-		ok = fifo_push((DICT){ count, val });
-	if (mode == 2 || (mode == 0 && !ok))
-		printf("%d : %ld\n", count, val);
-	++count;
+	printf("%ld\n", val);
 }
 
 // Request value for input
-// Arg: mode 0 = try pop from FIFO, then ask
-//           1 = only pop from FIFO buffer
-//           2 = only ask on terminal
-// Ret: counter + input value
-long input(int mode)
+// Ret: input value
+long input(void)
 {
-	static int count = 0;
 	char *s = NULL;
 	size_t t = 0;
-	DICT a;
 	long val = -1;
-	int ok = 1;
 
-	if (mode == 0 || mode == 1)
-		if ((ok = fifo_pop(&a)))
-			val = a.val;
-	if (mode == 2 || (mode == 0 && !ok))
-	{
-		printf("%d ? ", count);
-		if (getline(&s, &t, stdin) > 0)
-			val = atol(s);
-		free(s);
-	}
-	++count;
+	printf("? ");
+	if (getline(&s, &t, stdin) > 0)
+		val = atol(s);
+	free(s);
 	return val;
 }
 
@@ -290,7 +188,7 @@ int execprog(int reset)
 	int i, j, k, retval = ERR_OK;
 	long in, op, par[ARG], parmode;
 
-	long vec[3];
+	long vec[2];
 	int ivec = 0;
 
 	if (reset)
@@ -367,11 +265,7 @@ int execprog(int reset)
 		{
 			case ADD: mem[par[2]] = par[0] + par[1];  break;
 			case MUL: mem[par[2]] = par[0] * par[1];  break;
-			case IN :
-				if ((k = ball - paddle))
-					k = k > 0 ? 1 : -1;
-				mem[par[0]] = k;
-				break;
+			case IN : mem[par[0]] = k; break;
 			case OUT:
 				vec[ivec++] = par[0];
 				if (ivec == 3)
@@ -398,25 +292,8 @@ int execprog(int reset)
 
 // Draw tiles on screen
 // Arg: x=-1..41, y=0..23, t=0..4
-void drawtile(int x, int y, int z)
+void paint(long col, long dir)
 {
-	if (x >= 0 && y >= 0)
-	{
-		// Tile
-		printf("\033[%d;%dH", y + 1, x + 1);
-		switch (z)
-		{
-			case TILE_EMPTY : printf(" "); break;
-			case TILE_WALL  : printf("#"); break;
-			case TILE_BLOCK : printf("x"); break;
-			case TILE_PADDLE: printf("_"); paddle = x; break;
-			case TILE_BALL  : printf("o"); ball   = x; break;
-		}
-	} else if (x == -1 && y == 0)
-	{
-		// Score
-		printf("\033[25;1H%d", z);
-	}
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
@@ -433,13 +310,8 @@ int main(void)
 		mem = malloc(memsize * sizeof *mem);
 		if (dat != NULL && mem != NULL && readcsv() == len)
 		{
-			printf("\033[?25l");   // hide cursor
-			printf("\033[2J");     // clear screen
-			dat[0] = 2;            // play
 			ret = execprog(RESET);
-			printf("\033[26;1H");  // goto 1,26
-			printf("\033[?25h");   // show cursor
-			//printf("ret = %d\n", ret);
+			printf("ret = %d\n", ret);
 		}
 		free(mem);
 		free(dat);

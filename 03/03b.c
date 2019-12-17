@@ -1,11 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////
-//
-// Advent of Code 2019
-// Day 3a: Crossed wires, Manhattan distance
-//
-// E. Dronkert
-// https://github.com/ednl/aoc2019
-//
+////
+////  Advent of Code 2019
+////  Day 3: Crossed Wires, part two
+////
+////  E. Dronkert
+////  https://github.com/ednl/aoc2019
+////
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <stdio.h>   // fopen, fgetc, printf
@@ -17,7 +17,7 @@
 const char *inp = "inp03.txt";
 
 typedef struct Line {
-	int x1, y1, x2, y2;
+	int x1, y1, x2, y2, len, prev;
 } LINE, *PLINE;
 
 int min(int a, int b)
@@ -34,51 +34,31 @@ int dist(PLINE w1, PLINE w2)
 {
 	int p, q;
 
-	if (w1->y1 == w1->y2) {
-		// w1 = horizontal
-		if (w2->y1 == w2->y2) {
-			// w2 = horizontal
-			if (w1->y1 == w2->y1) {
-				// same horizontal line
-				p = max(w1->x1, w2->x1);
-				q = min(w1->x2, w2->x2);
-				if (p <= q) {
-					printf("!!!");
-					return min(abs(p), abs(q)) + w1->y1;
-				}
-			}
-		} else {
-			// w2 = vertical
-			if (w1->y1 >= w2->y1 && w1->y1 <= w2->y2 && w1->x1 <= w2->x1 && w1->x2 >= w2->x1)
-				return abs(w1->y1) + abs(w2->x1);
-		}
-	} else {
-		// w1 = vertical
-		if (w2->y1 == w2->y2) {
-			// w2 = horizontal
-			if (w1->x1 >= w2->x1 && w1->x1 <= w2->x2 && w1->y1 <= w2->y1 && w1->y2 >= w2->y1)
-				return abs(w1->x1) + abs(w2->y1);
-		} else {
-			// w2 = vertical
-			if (w1->x1 == w2->x1) {
-				// same vertical line
-				p = max(w1->y1, w2->y1);
-				q = min(w1->y2, w2->y2);
-				if (p <= q) {
-					printf("!!!");
-					return min(abs(p), abs(q)) + w1->x1;
-				}
-			}
-		}
+	if (w1->y1 == w1->y2 && w2->x1 == w2->x2) {
+		// w1 = horizontal, w2 = vertical
+		p = w1->x2 - w1->x1;
+		q = w2->y2 - w2->y1;
+		if (((q >= 0 && w1->y1 >= w2->y1 && w1->y1 <= w2->y2) || (q <= 0 && w1->y1 >= w2->y2 && w1->y1 <= w2->y1))
+			&&
+			((p >= 0 && w1->x1 <= w2->x1 && w1->x2 >= w2->x1) || (p <= 0 && w1->x2 <= w2->x1 && w1->x1 >= w2->x1)))
+			return w1->prev + w2->prev + abs(w1->y1 - w2->y1) + abs(w2->x1 - w1->x1);
+	} else if (w1->x1 == w1->x2 && w2->y1 == w2->y2) {
+		// w1 = vertical, w2 = horizontal
+		p = w1->y2 - w1->y1;
+		q = w2->x2 - w2->x1;
+		if (((q >= 0 && w1->x1 >= w2->x1 && w1->x1 <= w2->x2) || (q <= 0 && w1->x1 >= w2->x2 && w1->x1 <= w2->x1))
+			&&
+			((p >= 0 && w1->y1 <= w2->y1 && w1->y2 >= w2->y1) || (p <= 0 && w1->y2 <= w2->y1 && w1->y1 >= w2->y1)))
+			return w1->prev + w2->prev + abs(w1->x1 - w2->x1) + abs(w2->y1 - w1->y1);
 	}
-	return -1;  // no overlap
+	return -1;  // no crossing
 }
 
 int main(void)
 {
 	FILE *fp;
 	char val[BUFLEN];
-	int i, j, k, l, c, err = 0, x, y, dir;
+	int i, j, k, l, c, err = 0, x, y, dir, prev;
 
 	int len[WIRES];
 	PLINE wire[WIRES];
@@ -107,7 +87,7 @@ int main(void)
 	rewind(fp);
 	for (k = 0; k < WIRES; ++k) {
 		i = j = 0;
-		x = y = dir = 0;
+		x = y = dir = prev = 0;
 		while ((c = fgetc(fp)) != EOF && c != '\r' && c != '\n')
 			if (c == 'L' || c == 'R' || c == 'U' || c == 'D')
 				dir = c;
@@ -118,11 +98,12 @@ int main(void)
 					val[i] = '\0';
 					if ((l = atoi(val)) > 0)
 						switch (dir) {
-							case 'L': wire[k][j++] = (LINE){ x - l, y, x, y }; x -= l; break;
-							case 'R': wire[k][j++] = (LINE){ x, y, x + l, y }; x += l; break;
-							case 'U': wire[k][j++] = (LINE){ x, y, x, y + l }; y += l; break;
-							case 'D': wire[k][j++] = (LINE){ x, y - l, x, y }; y -= l; break;
+							case 'L': wire[k][j++] = (LINE){ x, y, x - l, y, l, prev }; x -= l; break;
+							case 'R': wire[k][j++] = (LINE){ x, y, x + l, y, l, prev }; x += l; break;
+							case 'U': wire[k][j++] = (LINE){ x, y, x, y + l, l, prev }; y += l; break;
+							case 'D': wire[k][j++] = (LINE){ x, y, x, y - l, l, prev }; y -= l; break;
 						}
+						prev += l;
 				}
 				i = 0;
 				dir = 0;
@@ -131,10 +112,10 @@ int main(void)
 				val[i] = '\0';
 				if ((l = atoi(val)) > 0)
 					switch (dir) {
-						case 'L': wire[k][j++] = (LINE){ x - l, y, x, y }; x -= l; break;
-						case 'R': wire[k][j++] = (LINE){ x, y, x + l, y }; x += l; break;
-						case 'U': wire[k][j++] = (LINE){ x, y, x, y + l }; y += l; break;
-						case 'D': wire[k][j++] = (LINE){ x, y - l, x, y }; y -= l; break;
+						case 'L': wire[k][j++] = (LINE){ x, y, x - l, y, l, prev }; x -= l; break;
+						case 'R': wire[k][j++] = (LINE){ x, y, x + l, y, l, prev }; x += l; break;
+						case 'U': wire[k][j++] = (LINE){ x, y, x, y + l, l, prev }; y += l; break;
+						case 'D': wire[k][j++] = (LINE){ x, y, x, y - l, l, prev }; y -= l; break;
 					}
 			}
 	}
