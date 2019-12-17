@@ -82,6 +82,7 @@ int main(void)
 	for (phase = 0; phase < 100; ++phase)
 		// Reverse to avoid O(n!)
 		for (i = size - 2; i >= 0; --i)
+			// Each element is the sum for the next one
 			vec[i] = (vec[i] + vec[i + 1]) % 10;
 
 	show(vec, 8);
