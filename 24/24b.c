@@ -14,28 +14,25 @@ int grid[TILES], next[TILES];
 
 int ix(int level, int x, int y)
 {
-	if (level < LEVELMIN || level > LEVELMAX || x < 0 || x >= DIM || y < 0 || y >= DIM)
-		return -1;  // invalid
-
 	return (level - LEVELMIN) * AREA + y * DIM + x;
 }
 
 void printlevels(int *a)
 {
-	int n, x, y, i, j;
+	int n, m, x, y;
 	
-	for (j = LEVELMIN; j <= LEVELMAX; j += 39)
+	for (m = LEVELMIN; m <= LEVELMAX; m += 26)
 	{
 		for (y = 0; y < DIM; ++y)
 		{
-			for (n = j; n < j + 39 && n <= LEVELMAX; ++n)
+			for (n = m; n < m + 26 && n <= LEVELMAX; ++n)
 			{
 				for (x = 0; x < DIM; ++x)
 				{
 					if (x == 2 && y == 2)
 						printf(" ");
-					else if ((i = ix(n, x, y)) >= 0)
-						printf("%c", a[i] ? '#' : '.');
+					else
+						printf("%c", a[ix(n, x, y)] ? '#' : '.');
 				}
 				printf(" ");
 			}
@@ -47,46 +44,35 @@ void printlevels(int *a)
 
 int bugrow(int *a, int level, int row)
 {
-	int x, i, sum = 0;
+	int x, sum = 0;
 
-	if (level < LEVELMIN || level > LEVELMAX || row < 0 || row >= DIM)
-		return 0;  // invalid
+	if (level > LEVELMAX)
+		return 0;  // out of range
 
 	for (x = 0; x < DIM; ++x)
-		if ((i = ix(level, x, row)) >= 0)
-			sum += a[i];
+		sum += a[ix(level, x, row)];
 
 	return sum;
 }
 
 int bugcol(int *a, int level, int col)
 {
-	int y, i, sum = 0;
+	int y, sum = 0;
 
-	if (level < LEVELMIN || level > LEVELMAX || col < 0 || col >= DIM)
-		return 0;  // invalid
+	if (level > LEVELMAX)
+		return 0;  // out of range
 
 	for (y = 0; y < DIM; ++y)
-		if ((i = ix(level, col, y)) >= 0)
-			sum += a[i];
+		sum += a[ix(level, col, y)];
 
 	return sum;
 }
 
 int bug(int *a, int level, int x, int y)
 {
-	int i;
+	if (level < LEVELMIN)
+		return 0;  // out of range
 
-	if ((x == 2 && y == 2) || x < -1 || x > DIM || y < -1 || y > DIM)
-	{
-		printf("Error in bug: lev=%d x=%d y=%d\n", level, x, y);
-		exit(1);
-	}
-
-	if (level < LEVELMIN || level > LEVELMAX)
-		return 0;  // invalid
-
-	// outside level
 	if (x == -1)
 		return bug(a, level - 1, 1, 2);
 	if (x == DIM)
@@ -96,26 +82,15 @@ int bug(int *a, int level, int x, int y)
 	if (y >= DIM)
 		return bug(a, level - 1, 2, 3);
 
-	// normal tile
-	if ((i = ix(level, x, y)) >= 0)
-		return a[i];
-	
-	printf("Error: lev=%d x=%d y=%d i=%d\n", level, x, y, i);
-	exit(1);
+	return a[ix(level, x, y)];
 }
 
 int neighbours(int *a, int level, int x, int y)
 {
 	int x1, y1, sum = 0;
 
-	if ((x == 2 && y == 2) || x < -1 || x > DIM || y < -1 || y > DIM)
-	{
-		printf("Error in neighbours: lev=%d x=%d y=%d\n", level, x, y);
-		exit(1);
-	}
-
 	if (level < LEVELMIN || level > LEVELMAX)
-		return 0;  // invalid
+		return 0;  // out of range
 
 	x1 = x; y1 = y + 1;  // below
 	sum += x1 == 2 && y1 == 2 ? bugrow(a, level + 1, 0)       : bug(a, level, x1, y1);
@@ -132,18 +107,21 @@ int neighbours(int *a, int level, int x, int y)
 	return sum;
 }
 
-void evolve(int *cur, int *nxt)
+void evolve(int *cur, int *nxt, int lim)
 {
-	int i, j, x, y, n;
+	int i, x, y, n, j = ix(-lim, 0, 0);
 
-	for (i = LEVELMIN; i <= LEVELMAX; ++i)
+	for (i = -lim; i <= lim; ++i)
 		for (y = 0; y < DIM; ++y)
 			for (x = 0; x < DIM; ++x)
-				if ((x != 2 || y != 2) && (j = ix(i, x, y)) >= 0)
+			{
+				if (x != 2 || y != 2)
 				{
 					n = neighbours(cur, i, x, y);
 					nxt[j] = cur[j] ? n == 1 : n == 1 || n == 2;
 				}
+				++j;
+			}
 }
 
 int main(void)
@@ -166,31 +144,35 @@ int main(void)
 
 	a = grid;
 	b = next;
-	printf("\033[?25l");
-	printf("\033[2J\033[1;1H");
-	printf("gen   0\n\n");
-	printlevels(a);
+	// printf("\033[?25l");
+	// printf("\033[2J\033[1;1H");
+	// printf("gen   0\n\n");
+	// printlevels(a);
 	for (i = 0; i < STEPS; ++i)
 	{
-		evolve(a, b);
+		evolve(a, b, i / 2 + 1);
 		t = a;
 		a = b;
 		b = t;
-		printf("\033[1;1H");
-		printf("gen %3d\n\n", i + 1);
-		printlevels(a);
-		for (j = 0; j < 20000000; ++j)
-			sum += (sum + j) % (j + 123456789);
+		// printf("\033[1;1H");
+		// printf("gen %3d\n\n", i + 1);
+		// printlevels(a);
+		// for (j = 0; j < 10000000; ++j)
+		// 	sum += (sum + j) % (j + 123456789);
 	}
 
 	sum = 0;
+	j = 0;
 	for (i = LEVELMIN; i <= LEVELMAX; ++i)
 		for (y = 0; y < DIM; ++y)
 			for (x = 0; x < DIM; ++x)
-				if ((x != 2 || y != 2) && (j = ix(i, x, y)) >= 0)
+			{
+				if (x != 2 || y != 2)
 					sum += a[j];
-	printf("sum %u\n", sum);
-	printf("\033[?25h");
+				++j;
+			}
+	printf("%u\n", sum);
+	// printf("\033[?25h");
 
 	return 0;
 }
