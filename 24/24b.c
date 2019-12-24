@@ -30,7 +30,7 @@ void printlevels(int *a)
 				for (x = 0; x < DIM; ++x)
 				{
 					if (x == 2 && y == 2)
-						printf(" ");
+						printf("?");
 					else
 						printf("%c", a[ix(n, x, y)] ? '#' : '.');
 				}
@@ -144,8 +144,8 @@ int main(void)
 
 	a = grid;
 	b = next;
-	// printf("\033[?25l");
-	// printf("\033[2J\033[1;1H");
+	// printf("\033[?25l");  // hide cursor
+	// printf("\033[2J\033[1;1H");  // cls-home
 	// printf("gen   0\n\n");
 	// printlevels(a);
 	for (i = 0; i < STEPS; ++i)
@@ -154,12 +154,13 @@ int main(void)
 		t = a;
 		a = b;
 		b = t;
-		// printf("\033[1;1H");
+		// printf("\033[1;1H");  // home
 		// printf("gen %3d\n\n", i + 1);
 		// printlevels(a);
 		// for (j = 0; j < 10000000; ++j)
-		// 	sum += (sum + j) % (j + 123456789);
+		// 	sum += (sum + j) % (j + 123456789);  // trick compiler
 	}
+	// printf("\033[?25h");  // show cursor
 
 	sum = 0;
 	j = 0;
@@ -172,7 +173,6 @@ int main(void)
 				++j;
 			}
 	printf("%u\n", sum);
-	// printf("\033[?25h");
 
 	return 0;
 }
