@@ -1,3 +1,15 @@
+///////////////////////////////////////////////////////////////////////////////
+////
+////  Advent of Code 2019
+////  Day 24: Planet of Discord, part two
+////
+////  E. Dronkert
+////  https://github.com/ednl/aoc2019
+////
+///////////////////////////////////////////////////////////////////////////////
+
+////////// Includes & Defines /////////////////////////////////////////////////
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -10,7 +22,7 @@
 #define LEVELMAX (STEPS / 2)
 #define LEVELMIN (-LEVELMAX)
 
-int grid[TILES], next[TILES];
+////////// Function Definitions ///////////////////////////////////////////////
 
 int ix(int level, int x, int y)
 {
@@ -124,10 +136,13 @@ void evolve(int *cur, int *nxt, int lim)
 			}
 }
 
+////////// Main ///////////////////////////////////////////////////////////////
+
 int main(void)
 {
 	FILE *fp;
 	int c, i, j, x, y, sum;
+	int grid[TILES], next[TILES];
 	int *a, *b, *t;
 
 	for (i = 0; i < TILES; ++i)
