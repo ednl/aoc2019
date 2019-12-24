@@ -16,10 +16,11 @@
 #define DIM 5
 #define STEPS 200
 
+#define MID (DIM >> 1)         // midpoint
 #define AREA (DIM * DIM)       // number of tiles in one level
 #define LEVELS (STEPS + 1)     // maximum number of levels (positive + zero + negative)
 #define TILES (LEVELS * AREA)  // total number of tiles
-#define LEVELMAX (STEPS / 2)
+#define LEVELMAX (STEPS >> 1)
 #define LEVELMIN (-LEVELMAX)
 
 ////////// Function Definitions ///////////////////////////////////////////////
@@ -41,7 +42,7 @@ void printlevels(int *a)
 			{
 				for (x = 0; x < DIM; ++x)
 				{
-					if (x == 2 && y == 2)
+					if (x == MID && y == MID)
 						printf("?");
 					else
 						printf("%c", a[ix(n, x, y)] ? '#' : '.');
@@ -86,13 +87,13 @@ int bug(int *a, int level, int x, int y)
 		return 0;  // out of range
 
 	if (x == -1)
-		return bug(a, level - 1, 1, 2);
+		return bug(a, level - 1, MID - 1, MID);
 	if (x == DIM)
-		return bug(a, level - 1, 3, 2);
+		return bug(a, level - 1, MID + 1, MID);
 	if (y == -1)
-		return bug(a, level - 1, 2, 1);
+		return bug(a, level - 1, MID, MID - 1);
 	if (y >= DIM)
-		return bug(a, level - 1, 2, 3);
+		return bug(a, level - 1, MID, MID + 1);
 
 	return a[ix(level, x, y)];
 }
@@ -127,7 +128,7 @@ void evolve(int *cur, int *nxt, int lim)
 		for (y = 0; y < DIM; ++y)
 			for (x = 0; x < DIM; ++x)
 			{
-				if (x != 2 || y != 2)
+				if (x != MID || y != MID)
 				{
 					n = neighbours(cur, i, x, y);
 					nxt[j] = cur[j] ? n == 1 : n == 1 || n == 2;
@@ -150,10 +151,10 @@ int main(void)
 
 	if ((fp = fopen("24.txt", "r")) != NULL)
 	{
-		if ((i = ix(0, 0, 0)) >= 0)
-			while ((c = fgetc(fp)) != EOF)
-				if (c == '#' || c == '.' || c == '?')
-					grid[i++] = c == '#';
+		i = ix(0, 0, 0);
+		while ((c = fgetc(fp)) != EOF)
+			if (c == '#' || c == '.' || c == '?')
+				grid[i++] = c == '#';
 		fclose(fp);
 	}
 
@@ -183,7 +184,7 @@ int main(void)
 		for (y = 0; y < DIM; ++y)
 			for (x = 0; x < DIM; ++x)
 			{
-				if (x != 2 || y != 2)
+				if (x != MID || y != MID)
 					sum += a[j];
 				++j;
 			}
