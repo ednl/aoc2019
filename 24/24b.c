@@ -11,12 +11,11 @@
 ////////// Includes & Defines /////////////////////////////////////////////////
 
 #include <stdio.h>
-#include <stdlib.h>
 
 #define DIM 5
 #define STEPS 200
 
-#define MID (DIM / 2)    // midpoint
+#define MID (DIM / 2)          // midpoint
 #define AREA (DIM * DIM)       // number of tiles in one level
 #define LEVELS (STEPS + 1)     // maximum number of levels (positive + zero + negative)
 #define TILES (LEVELS * AREA)  // total number of tiles
@@ -144,6 +143,21 @@ void evolve(int *cur, int *nxt)
 				}
 }
 
+int count(int *a)
+{
+	int n, x, y, i = 0, sum = 0;
+
+	for (n = LEVELMIN; n <= LEVELMAX; ++n)
+		for (y = 0; y < DIM; ++y)
+			for (x = 0; x < DIM; ++x)
+			{
+				if (x != MID || y != MID)
+					sum += a[i];
+				++i;
+			}
+	return sum;
+}
+
 ////////// Main ///////////////////////////////////////////////////////////////
 
 int main(void)
@@ -165,12 +179,13 @@ int main(void)
 		fclose(fp);
 	}
 
-	a = grid;
-	b = next;
 	printf("\033[?25l");  // hide cursor
 	printf("\033[2J\033[1;1H");  // cls-home
-	printf("gen   0\n\n");
-	printlevels(a);
+	printf("minute %3d bugs %4d\n\n", 0, count(grid));
+	printlevels(grid);
+
+	a = grid;
+	b = next;
 	for (i = 0; i < STEPS; ++i)
 	{
 		evolve(a, b);
@@ -178,24 +193,9 @@ int main(void)
 		a = b;
 		b = t;
 		printf("\033[1;1H");  // home
-		printf("gen %3d\n\n", i + 1);
+		printf("minute %3d bugs %4d\n\n", i + 1, count(a));
 		printlevels(a);
-		// for (j = 0; j < 10000000; ++j)
-		// 	sum += (sum + j) % (j + 123456789);  // trick compiler into slowing down
 	}
 	printf("\033[?25h");  // show cursor
-
-	sum = 0;
-	j = 0;
-	for (i = LEVELMIN; i <= LEVELMAX; ++i)
-		for (y = 0; y < DIM; ++y)
-			for (x = 0; x < DIM; ++x)
-			{
-				if (x != MID || y != MID)
-					sum += a[j];
-				++j;
-			}
-	printf("%u\n", sum);
-
 	return 0;
 }
