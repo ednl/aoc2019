@@ -16,23 +16,26 @@
 #define DIM 5
 #define STEPS 200
 
-#define MID (DIM >> 1)         // midpoint
+#define MID (DIM / 2)    // midpoint
 #define AREA (DIM * DIM)       // number of tiles in one level
 #define LEVELS (STEPS + 1)     // maximum number of levels (positive + zero + negative)
 #define TILES (LEVELS * AREA)  // total number of tiles
-#define LEVELMAX (STEPS >> 1)
+#define LEVELMAX (STEPS / 2)
 #define LEVELMIN (-LEVELMAX)
 
 ////////// Function Definitions ///////////////////////////////////////////////
 
 int ix(int level, int x, int y)
 {
+	if (level < LEVELMIN || level > LEVELMAX || x < 0 || x >= DIM || y < 0 || y >= DIM)
+		return -1;
+
 	return (level - LEVELMIN) * AREA + y * DIM + x;
 }
 
 void printlevels(int *a)
 {
-	int n, m, x, y;
+	int n, m, x, y, i;
 	
 	for (m = LEVELMIN; m <= LEVELMAX; m += 26)
 	{
@@ -44,8 +47,8 @@ void printlevels(int *a)
 				{
 					if (x == MID && y == MID)
 						printf("?");
-					else
-						printf("%c", a[ix(n, x, y)] ? '#' : '.');
+					else if ((i = ix(n, x, y)) >= 0)
+						printf("%c", a[i] ? '#' : '.');
 				}
 				printf(" ");
 			}
@@ -57,32 +60,36 @@ void printlevels(int *a)
 
 int bugrow(int *a, int level, int row)
 {
-	int x, sum = 0;
+	int x, i, sum = 0;
 
 	if (level > LEVELMAX)
 		return 0;  // out of range
 
 	for (x = 0; x < DIM; ++x)
-		sum += a[ix(level, x, row)];
+		if ((i = ix(level, x, row)) >= 0)
+			sum += a[i];
 
 	return sum;
 }
 
 int bugcol(int *a, int level, int col)
 {
-	int y, sum = 0;
+	int y, i, sum = 0;
 
 	if (level > LEVELMAX)
 		return 0;  // out of range
 
 	for (y = 0; y < DIM; ++y)
-		sum += a[ix(level, col, y)];
+		if ((i = ix(level, col, y)) >= 0)
+			sum += a[i];
 
 	return sum;
 }
 
 int bug(int *a, int level, int x, int y)
 {
+	int i;
+
 	if (level < LEVELMIN)
 		return 0;  // out of range
 
@@ -95,7 +102,10 @@ int bug(int *a, int level, int x, int y)
 	if (y >= DIM)
 		return bug(a, level - 1, MID, MID + 1);
 
-	return a[ix(level, x, y)];
+	if ((i = ix(level, x, y)) >= 0)
+		return a[i];
+
+	return 0;
 }
 
 int neighbours(int *a, int level, int x, int y)
@@ -120,21 +130,18 @@ int neighbours(int *a, int level, int x, int y)
 	return sum;
 }
 
-void evolve(int *cur, int *nxt, int lim)
+void evolve(int *cur, int *nxt)
 {
-	int i, x, y, n, j = ix(-lim, 0, 0);
+	int i, j, x, y, n;
 
-	for (i = -lim; i <= lim; ++i)
+	for (i = LEVELMIN; i <= LEVELMAX; ++i)
 		for (y = 0; y < DIM; ++y)
 			for (x = 0; x < DIM; ++x)
-			{
-				if (x != MID || y != MID)
+				if ((x != MID || y != MID) && (j = ix(i, x, y)) >= 0)
 				{
 					n = neighbours(cur, i, x, y);
 					nxt[j] = cur[j] ? n == 1 : n == 1 || n == 2;
 				}
-				++j;
-			}
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
@@ -160,23 +167,23 @@ int main(void)
 
 	a = grid;
 	b = next;
-	// printf("\033[?25l");  // hide cursor
-	// printf("\033[2J\033[1;1H");  // cls-home
-	// printf("gen   0\n\n");
-	// printlevels(a);
+	printf("\033[?25l");  // hide cursor
+	printf("\033[2J\033[1;1H");  // cls-home
+	printf("gen   0\n\n");
+	printlevels(a);
 	for (i = 0; i < STEPS; ++i)
 	{
-		evolve(a, b, i / 2 + 1);
+		evolve(a, b);
 		t = a;
 		a = b;
 		b = t;
-		// printf("\033[1;1H");  // home
-		// printf("gen %3d\n\n", i + 1);
-		// printlevels(a);
+		printf("\033[1;1H");  // home
+		printf("gen %3d\n\n", i + 1);
+		printlevels(a);
 		// for (j = 0; j < 10000000; ++j)
-		// 	sum += (sum + j) % (j + 123456789);  // trick compiler
+		// 	sum += (sum + j) % (j + 123456789);  // trick compiler into slowing down
 	}
-	// printf("\033[?25h");  // show cursor
+	printf("\033[?25h");  // show cursor
 
 	sum = 0;
 	j = 0;
