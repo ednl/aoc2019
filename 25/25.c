@@ -16,18 +16,18 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include <stdio.h>   // fopen, fgetc, getdelim, printf
-#include <stdlib.h>  // atoi, atol(l)
-#include <stdint.h>  // int64_t
-#include <inttypes.h>  // PRId64
-#include <ctype.h>   // isdigit
-#include <string.h>  // strcpy
+#include <stdio.h>     // fopen, fclose, fgetc, getdelim, getline, printf
+#include <stdlib.h>    // atoi, atol(l), malloc, realloc, free
+#include <stdint.h>    // int64_t for Raspberry Pi compatibility where long=32-bit
+#include <inttypes.h>  // PRId64 = ld on PC/Mac, lld on RPi
+#include <ctype.h>     // isdigit
+#include <string.h>    // strcpy
 
 #define DEBUG
 
 // Virtual machine operation
 #define VM_FNLEN  32  // max file name length of program on disk
-#define VM_PAD  2000  // storage space to add at end of program
+#define VM_GROW 1000  // storage space to add when requested
 #define VM_RESUME  0
 #define VM_RESET   1
 
@@ -39,6 +39,7 @@
 #define ERR_SEGFAULT_READ    4
 #define ERR_SEGFAULT_WRITE   5
 #define ERR_SEGFAULT_OTHER   6
+#define ERR_OUTOFMEMORY      7
 
 // CPU opcodes
 #define CPU_ADD  1L  // add
@@ -142,7 +143,7 @@ int aoc_csvfields(void)
 	return i;
 }
 
-// Read long integer CSV values from file to cache
+// Read 64-bit integer CSV values from file to cache
 // Pre: vm_cache must be allocated to size vm_cachesize > 0
 //      vm_filename must contain name of readable file
 // Ret: number of values read
@@ -193,8 +194,8 @@ int vm_exec(int reset)
 	static int base = 0;  // "relative base offset"
 	static int tick = 0;
 	int instr, opcode, parmode;
-	int64_t par[PAR_MAX];
-	int i, j, k;
+	int64_t par[PAR_MAX], *tmpptr;
+	int i, j, k, tmpsize;
 
 	if (reset)
 	{
@@ -242,7 +243,7 @@ int vm_exec(int reset)
 				if (par[j] < 0 || par[j] >= vm_memorysize)
 				{
 					#ifdef DEBUG
-					printf("Read beyond program size: %" PRId64 "\n", par[j] - vm_memorysize + 1);
+					printf("Read beyond program size: %+" PRId64 "\n", par[j] - vm_memorysize + 1);
 					#endif
 					return ERR_SEGFAULT_READ;
 				}
@@ -256,10 +257,37 @@ int vm_exec(int reset)
 			par[j] = vm_memory[ip++];   // get address param, increment program counter
 			if (instr % 10 == PAR_OFF)  // par mode = offset?
 				par[j] += base;
+			if (par[j] >= vm_memorysize)
+			{
+				// Try to grow program size in chunks of VM_GROW
+				tmpsize = vm_memorysize;
+				while (tmpsize < par[j] + 1)
+					tmpsize += VM_GROW;
+				if ((tmpptr = realloc(vm_memory, tmpsize * sizeof *vm_memory)) != NULL)
+				{
+					// Success
+					#ifdef DEBUG
+					printf("Allocated more memory: cur=%d new=%d\n", vm_memorysize, tmpsize);
+					printf("ip=%d base=%d tick=%d\n", ip, base, tick);
+					#endif
+					for (i = vm_memorysize; i < tmpsize; ++i)
+						tmpptr[i] = 0;
+					vm_memory = tmpptr;
+					vm_memorysize = tmpsize;
+				} else
+				{
+					// Out of memory
+					#ifdef DEBUG
+					printf("Unable to allocate more memory: cur=%d new=%d\n", vm_memorysize, tmpsize);
+					printf("ip=%d base=%d tick=%d\n", ip, base, tick);
+					#endif
+					return ERR_OUTOFMEMORY;
+				}
+			}
 			if (par[j] < 0 || par[j] >= vm_memorysize)
 			{
 				#ifdef DEBUG
-				printf("Write beyond program size: %" PRId64 "\n", par[j] - vm_memorysize + 1);
+				printf("Write beyond program size: %+" PRId64 "\n", par[j] - vm_memorysize + 1);
 				printf("ip=%d base=%d tick=%d\n", ip, base, tick);
 				#endif
 				return ERR_SEGFAULT_WRITE;
@@ -383,13 +411,13 @@ int main(int argc, char *argv[])
 	{
 		// Allocate memory
 		vm_cachesize  = len;
-		vm_memorysize = len + VM_PAD;
+		vm_memorysize = len;  // no initial padding
 		vm_cache  = malloc(vm_cachesize  * sizeof *vm_cache );
 		vm_memory = malloc(vm_memorysize * sizeof *vm_memory);
 		// Read into memory
 		if (vm_cache != NULL && vm_memory != NULL && aoc_csv2cache() == len)
 		{
-			// Run program, part one
+			// Run program
 			if ((ret = vm_exec(VM_RESET)) != ERR_OK)
 				printf("Error: %d\n", ret);
 		}
