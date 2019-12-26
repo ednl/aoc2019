@@ -17,7 +17,9 @@
 #endif
 
 #include <stdio.h>   // fopen, fgetc, getdelim, printf
-#include <stdlib.h>  // atoi, atol
+#include <stdlib.h>  // atoi, atol(l)
+#include <stdint.h>  // int64_t
+#include <inttypes.h>  // PRId64
 #include <ctype.h>   // isdigit
 #include <string.h>  // strcpy
 
@@ -25,7 +27,7 @@
 
 // Virtual machine operation
 #define VM_FNLEN  32  // max file name length of program on disk
-#define VM_PAD  3000  // storage space to add at end of program
+#define VM_PAD  2000  // storage space to add at end of program
 #define VM_RESUME  0
 #define VM_RESET   1
 
@@ -85,7 +87,7 @@ static const int cpusize = sizeof cpu / sizeof *cpu;
 
 // Virtual machine
 static char vm_filename[VM_FNLEN + 1];
-static long *vm_cache = NULL, *vm_memory = NULL;
+static int64_t *vm_cache = NULL, *vm_memory = NULL;
 static int vm_cachesize = 0, vm_memorysize = 0;
 
 ////////// Function Declarations //////////////////////////////////////////////
@@ -96,8 +98,8 @@ int aoc_csvfields(void);
 int aoc_csv2cache(void);
 void vm_refresh(void);
 int vm_exec(int);
-long vm_input(void);
-void vm_output(long);
+int64_t vm_input(void);
+void vm_output(int64_t);
 
 ////////// Function Definitions ///////////////////////////////////////////////
 
@@ -155,7 +157,7 @@ int aoc_csv2cache(void)
 		(fp = fopen(vm_filename, "r")) != NULL)
 	{
 		while (i < vm_cachesize && getdelim(&s, &t, ',', fp) > 0)
-			vm_cache[i++] = atol(s);
+			vm_cache[i++] = (int64_t)atoll(s);
 		free(s);
 		fclose(fp);
 	}
@@ -167,7 +169,7 @@ int aoc_csv2cache(void)
 //      mem must be allocated to size memsize >= datsize
 void vm_refresh(void)
 {
-	long *src, *dst;
+	int64_t *src, *dst;
 	int i;
 
 	if (vm_cache != NULL && vm_memory != NULL &&
@@ -191,7 +193,7 @@ int vm_exec(int reset)
 	static int base = 0;  // "relative base offset"
 	static int tick = 0;
 	int instr, opcode, parmode;
-	long par[PAR_MAX];
+	int64_t par[PAR_MAX];
 	int i, j, k;
 
 	if (reset)
@@ -240,7 +242,7 @@ int vm_exec(int reset)
 				if (par[j] < 0 || par[j] >= vm_memorysize)
 				{
 					#ifdef DEBUG
-					printf("Read beyond program size: %ld\n", par[j] - vm_memorysize + 1);
+					printf("Read beyond program size: %" PRId64 "\n", par[j] - vm_memorysize + 1);
 					#endif
 					return ERR_SEGFAULT_READ;
 				}
@@ -257,7 +259,7 @@ int vm_exec(int reset)
 			if (par[j] < 0 || par[j] >= vm_memorysize)
 			{
 				#ifdef DEBUG
-				printf("Write beyond program size: %ld\n", par[j] - vm_memorysize + 1);
+				printf("Write beyond program size: %" PRId64 "\n", par[j] - vm_memorysize + 1);
 				printf("ip=%d base=%d tick=%d\n", ip, base, tick);
 				#endif
 				return ERR_SEGFAULT_WRITE;
@@ -295,13 +297,13 @@ int asciichar(char c)
 	return c >= ' ' || c == '\n';
 }
 
-int asciilong(long lc)
+int asciilong(int64_t lc)
 {
 	return (lc >= ' ' && lc <= 127) || lc == '\n';
 }
 
 // Request value for input
-long vm_input(void)
+int64_t vm_input(void)
 {
 	static char *s = NULL;
 	static size_t t = 0;
@@ -357,14 +359,14 @@ long vm_input(void)
 }
 
 // Process value for output
-void vm_output(long val)
+void vm_output(int64_t val)
 {
 	static int count = 0;
 
 	if (asciilong(val))
 		printf("%c", (char)val);
 	else
-		printf("%d: %ld\n", count++, val);
+		printf("%d: %" PRId64 "\n", count++, val);
 }
 
 ////////// Main ///////////////////////////////////////////////////////////////
