@@ -45,6 +45,8 @@
 #define ERR_SEGFAULT_OTHER   6
 #define ERR_OUTOFMEMORY      7
 #define ERR_ARGUMENTS        8
+#define ERR_LIST_EMPTY       9
+#define ERR_LIST_NOTFOUND   10
 
 // CPU opcodes
 #define CPU_NOP  0  // no operation (extension of spec for zero based array)
@@ -73,6 +75,13 @@ typedef struct Instr {
 	int read, write;
 } INSTR;
 
+typedef struct Node NODE, *PNODE;
+struct Node {
+	int key;
+	int64_t val;
+	PNODE next;
+};
+
 // Language definition: { opcode, read par count, write par count }
 // Every read parameter can be positional or immediate
 // Write parameters are always positional
@@ -98,7 +107,15 @@ static const int cpusize = sizeof cpu / sizeof *cpu;
 static int64_t *vm_cache = NULL, *vm_mem = NULL;
 static int vm_cachesize = 0, vm_memsize = 0;
 
+static PNODE list = NULL, listhead = NULL;
+
 ////////// Function Declarations //////////////////////////////////////////////
+
+int list_push(int, int64_t);
+int list_pop(int *, int64_t *);
+int list_find(int, int64_t *);
+int list_count(void);
+void list_free(void);
 
 int vm_resize(int64_t **, int *, int);
 int vm_growto(int64_t **, int *, int);
@@ -112,6 +129,98 @@ void vm_output_num(int64_t);
 void vm_output_txt(int64_t);
 
 ////////// Function Definitions ///////////////////////////////////////////////
+
+int list_push(int key, int64_t val)
+{
+	PNODE n = malloc(sizeof *n);
+	
+	if (n == NULL)
+		return ERR_OUTOFMEMORY;
+
+	n->key = key;
+	n->val = val;
+	n->next = NULL;
+
+	if (listhead != NULL)
+		listhead->next = n;
+	else
+		list = n;
+
+	listhead = n;
+	return ERR_OK;
+}
+
+int list_pop(int *key, int64_t *val)
+{
+	PNODE n = list;
+
+	if (n == NULL)
+		return ERR_LIST_EMPTY;
+
+	*key = n->key;
+	*val = n->val;
+
+	if ((list = n->next) == NULL)
+		listhead = NULL;
+
+	free(n);
+	return ERR_OK;
+}
+
+int list_find(int key, int64_t *val)
+{
+	PNODE n0 = NULL, n1 = list;
+
+	if (n1 == NULL)
+		return ERR_LIST_EMPTY;
+
+	while (n1->key != key && n1->next != NULL)
+	{
+		n0 = n1;
+		n1 = n1->next;
+	}
+	if (n1->key != key)
+		return ERR_LIST_NOTFOUND;
+
+	*val = n1->val;
+
+	if (n0 == NULL)  // same as pop
+	{
+		if ((list = n1->next) == NULL)
+			listhead = NULL;
+	} else if ((n0->next = n1->next) == NULL)  // last element?
+		listhead = n0;
+
+	free(n1);
+	return ERR_OK;
+}
+
+int list_count(void)
+{
+	int len = 0;
+	PNODE n = list;
+
+	while (n != NULL)
+	{
+		n = n->next;
+		++len;
+	}
+	return len;
+}
+
+void list_free(void)
+{
+	PNODE n0 = NULL, n1 = list;
+
+	while (n1 != NULL)
+	{
+		n0 = n1;
+		n1 = n1->next;
+		free(n0);
+	}
+	list = NULL;
+	listhead = NULL;
+}
 
 int vm_resize(int64_t **mem, int *fromsize, int tosize)
 {
